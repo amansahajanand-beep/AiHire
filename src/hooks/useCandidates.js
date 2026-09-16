@@ -1,51 +1,57 @@
-import { useCallback, useEffect, useState } from 'react';
-import { listCandidates } from '../api/candidates';
-import { listJobs } from '../api/jobs';
+import { useCallback, useEffect } from 'react';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { fetchCandidates } from '../store/slices/candidatesSlice';
+import { fetchJobs } from '../store/slices/jobsSlice';
+
+const LIST_KEY = 'all::all';
 
 export default function useCandidates(initialParams = {}) {
-  const [params, setParams] = useState(initialParams);
-  const [data, setData] = useState({ candidates: [], source: 'live' });
-  const [jobOptions, setJobOptions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const dispatch = useAppDispatch();
+  const list = useAppSelector((s) => s.candidates.lists[LIST_KEY]);
+  const jobs = useAppSelector((s) => s.jobs.items);
+  const jobsStatus = useAppSelector((s) => s.jobs.status);
 
-  const reload = useCallback(async (nextParams) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const merged = { ...params, ...nextParams };
-      setParams(merged);
-      const [candidateResult, jobsResult] = await Promise.all([
-        listCandidates(merged),
-        listJobs(),
+  const candidates = list?.items || [];
+  const loading = (!list || list.status === 'loading' || list.status === 'idle') && candidates.length === 0;
+  const error = list?.error ? { message: list.error } : null;
+
+  const reload = useCallback(
+    async (nextParams = {}) => {
+      const merged = { ...initialParams, ...nextParams, force: true };
+      const [candidateResult] = await Promise.all([
+        dispatch(fetchCandidates(merged)).unwrap(),
+        dispatch(fetchJobs({ force: true })).unwrap(),
       ]);
-      setData(candidateResult);
-      setJobOptions(
-        (jobsResult.jobs || []).map((j) => ({ value: j.id, label: `${j.title} (${j.jobCode})` }))
-      );
       return candidateResult;
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [params]);
+    },
+    [dispatch, initialParams]
+  );
 
   useEffect(() => {
-    reload(initialParams).catch(() => {});
+    dispatch(fetchCandidates(initialParams));
+    if (jobsStatus === 'idle' || jobs.length === 0) {
+      dispatch(fetchJobs());
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [dispatch]);
 
   return {
-    data,
-    candidates: data?.candidates || [],
-    jobOptions,
-    statusOptions: ['All', 'Shortlisted', 'Human Review', 'Pending', 'Low Match', 'Rejected'],
+    data: { candidates, source: list?.source || 'live' },
+    candidates,
+    jobOptions: (jobs || []).map((j) => ({ value: j.id, label: `${j.title} (${j.jobCode})` })),
+    statusOptions: [
+      'All',
+      'Highly Recommended',
+      'Shortlisted',
+      'Human Review',
+      'Pending',
+      'Not Recommended',
+      'Rejected',
+    ],
     totals: null,
     loading,
     error,
     reload,
-    source: data?.source || 'live',
+    source: list?.source || 'live',
   };
 }

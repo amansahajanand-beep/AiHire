@@ -1,9 +1,11 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Briefcase, FileSearch, Bot, Activity,
-  Settings, HelpCircle, LogOut, Hexagon, X,
+  Settings, HelpCircle, LogOut, Sparkles, X,
 } from 'lucide-react';
 import { logout } from '../../api/auth';
+import { useAppDispatch } from '../../store/hooks';
+import { resetHiringData } from '../../store';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -21,32 +23,43 @@ const bottomItems = [
 
 export default function AppSidebar({ isOpen, onClose }) {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
 
   const linkClass = ({ isActive }) =>
-    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+    `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors border-l-[3px] ${
       isActive
-        ? 'bg-indigo-600 text-white'
-        : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+        ? 'bg-indigo-50 text-indigo-700 border-indigo-600'
+        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900 border-transparent'
     }`;
 
   return (
     <>
-      {isOpen && <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />}
-      <aside className={`fixed top-0 left-0 z-50 h-full w-64 bg-[#0F172A] transform transition-transform duration-200 lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {isOpen && <div className="fixed inset-0 bg-black/40 z-40 lg:hidden" onClick={onClose} />}
+      <aside
+        className={`fixed top-0 left-0 z-50 h-full w-64 bg-white border-r border-slate-200 transform transition-transform duration-200 lg:translate-x-0 ${
+          isOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
         <div className="flex flex-col h-full">
-          <div className="flex items-center gap-2.5 px-5 py-5">
-            <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
-              <Hexagon className="w-4 h-4 text-white fill-white/20" />
+          <div className="flex items-start justify-between gap-2 px-5 pt-6 pb-4">
+            <div>
+              <p className="text-xl font-bold text-indigo-600 tracking-tight leading-none">HireAI</p>
+              <p className="text-[10px] font-semibold tracking-[0.14em] text-slate-400 mt-1.5 uppercase">
+                Recruitment OS
+              </p>
             </div>
-            <span className="text-white font-bold text-lg tracking-tight">HireAI</span>
             {onClose && (
-              <button onClick={onClose} className="ml-auto lg:hidden text-slate-400 hover:text-white">
+              <button onClick={onClose} className="lg:hidden p-1 text-slate-400 hover:text-slate-700">
                 <X className="w-5 h-5" />
               </button>
             )}
           </div>
 
-          <nav className="flex-1 px-3 py-2 space-y-0.5 overflow-y-auto">
+          <div className="px-5 mb-2">
+            <p className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase">Workspace</p>
+          </div>
+
+          <nav className="flex-1 px-3 space-y-0.5 overflow-y-auto">
             {navItems.map(({ to, label, icon: Icon }) => (
               <NavLink key={to} to={to} className={linkClass} onClick={onClose}>
                 <Icon className="w-[18px] h-[18px] shrink-0" />
@@ -55,7 +68,7 @@ export default function AppSidebar({ isOpen, onClose }) {
             ))}
           </nav>
 
-          <div className="px-3 py-4 border-t border-slate-800 space-y-0.5">
+          <div className="px-3 pb-3 space-y-0.5">
             {bottomItems.map(({ to, label, icon: Icon }) => (
               <NavLink key={label} to={to} className={linkClass} onClick={onClose}>
                 <Icon className="w-[18px] h-[18px] shrink-0" />
@@ -65,12 +78,35 @@ export default function AppSidebar({ isOpen, onClose }) {
             <button
               onClick={() => {
                 logout();
+                resetHiringData(dispatch);
                 navigate('/login');
               }}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors w-full"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors w-full border-l-[3px] border-transparent"
             >
               <LogOut className="w-[18px] h-[18px] shrink-0" />
               <span>Logout</span>
+            </button>
+          </div>
+
+          <div className="px-4 pb-5">
+            <button
+              onClick={() => {
+                onClose?.();
+                navigate('/resume-screening');
+              }}
+              className="w-full text-left rounded-xl bg-indigo-50 border border-indigo-100 p-3.5 hover:bg-indigo-100/70 transition-colors"
+            >
+              <div className="flex items-start gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-white border border-indigo-100 flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-indigo-900">AI screening ready</p>
+                  <p className="text-xs text-indigo-600/80 mt-0.5 leading-relaxed">
+                    Select a job to start matching resumes.
+                  </p>
+                </div>
+              </div>
             </button>
           </div>
         </div>

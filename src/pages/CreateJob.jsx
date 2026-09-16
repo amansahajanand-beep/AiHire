@@ -3,10 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Send } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
-import { createJob } from '../api/jobs';
+import { useAppDispatch } from '../store/hooks';
+import { createJobThunk } from '../store/slices/jobsSlice';
+import { invalidateHiringData } from '../store';
 
 export default function CreateJob() {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const [form, setForm] = useState({
     title: '', department: '', location: '', type: 'Full-time',
     experience: '', description: '', skills: '', responsibilities: '', qualifications: '',
@@ -20,18 +23,21 @@ export default function CreateJob() {
     setSaving(true);
     setError('');
     try {
-      await createJob({
-        title: form.title,
-        department: form.department,
-        location: form.location,
-        employmentType: form.type,
-        experience: form.experience,
-        description: form.description,
-        skills: form.skills,
-        responsibilities: form.responsibilities,
-        qualifications: form.qualifications,
-        status: action === 'draft' ? 'Draft' : 'Published',
-      });
+      await dispatch(
+        createJobThunk({
+          title: form.title,
+          department: form.department,
+          location: form.location,
+          employmentType: form.type,
+          experience: form.experience,
+          description: form.description,
+          skills: form.skills,
+          responsibilities: form.responsibilities,
+          qualifications: form.qualifications,
+          status: action === 'draft' ? 'Draft' : 'Published',
+        })
+      ).unwrap();
+      invalidateHiringData(dispatch);
       navigate('/jobs');
     } catch (err) {
       setError(err.message || 'Failed to save job');

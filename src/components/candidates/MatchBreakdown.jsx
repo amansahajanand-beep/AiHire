@@ -2,11 +2,11 @@ const labels = {
   skills: 'Skills',
   experience: 'Experience',
   education: 'Education',
+  stability: 'Stability',
   keywords: 'Keywords',
   overall: 'Overall',
 };
 
-/** Match mockup: Skills/Experience/Overall green; Education/Keywords amber when mid-high */
 function barStyle(key, value) {
   if (key === 'education' || key === 'keywords') {
     return { bar: '#FBBF24', text: 'text-amber-500' };
@@ -18,10 +18,10 @@ function barStyle(key, value) {
 }
 
 export default function MatchBreakdown({ breakdown }) {
-  const order = ['skills', 'experience', 'education', 'keywords', 'overall'];
+  const order = ['skills', 'experience', 'education', 'stability', 'overall'];
   const entries = order
-    .filter((k) => breakdown[k] != null)
-    .map((k) => [k, breakdown[k]]);
+    .filter((k) => breakdown?.[k] != null)
+    .map((k) => [k, Number(breakdown[k]) || 0]);
 
   return (
     <div className="space-y-5">
@@ -33,11 +33,11 @@ export default function MatchBreakdown({ breakdown }) {
             <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700 ease-out"
-                style={{ width: `${value}%`, backgroundColor: style.bar }}
+                style={{ width: `${Math.min(Math.max(value, 0), 100)}%`, backgroundColor: style.bar }}
               />
             </div>
             <span className={`text-sm font-bold w-10 text-right tabular-nums ${style.text}`}>
-              {value}%
+              {Math.round(value)}%
             </span>
           </div>
         );

@@ -2,31 +2,34 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FilterDropdown from '../components/ui/FilterDropdown';
 import FileUploadZone from '../components/ui/FileUploadZone';
-import { listJobs } from '../api/jobs';
 import { uploadResumesForScreening } from '../api/resume';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { fetchJobs } from '../store/slices/jobsSlice';
+import { invalidateHiringData } from '../store';
 
 export default function ResumeScreening() {
   const navigate = useNavigate();
-  const [jobOptions, setJobOptions] = useState([]);
+  const dispatch = useAppDispatch();
+  const jobs = useAppSelector((s) => s.jobs.items);
+  const jobsStatus = useAppSelector((s) => s.jobs.status);
   const [selectedJob, setSelectedJob] = useState('');
   const [files, setFiles] = useState([]);
-  const [loadingJobs, setLoadingJobs] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState(null);
 
+  const jobOptions = (jobs || [])
+    .filter((j) => j.status === 'Published' || j.status === 'Draft')
+    .map((j) => ({ value: j.id, label: `${j.title} (${j.jobCode})` }));
+  const loadingJobs = jobsStatus === 'loading' && jobOptions.length === 0;
+
   useEffect(() => {
-    listJobs()
-      .then((res) => {
-        const opts = (res.jobs || [])
-          .filter((j) => j.status === 'Published' || j.status === 'Draft')
-          .map((j) => ({ value: j.id, label: `${j.title} (${j.jobCode})` }));
-        setJobOptions(opts);
-        if (opts[0]) setSelectedJob(opts[0].value);
-      })
-      .catch((err) => setError(err.message || 'Failed to load jobs'))
-      .finally(() => setLoadingJobs(false));
-  }, []);
+    dispatch(fetchJobs()).catch(() => {});
+  }, [dispatch]);
+
+  useEffect(() => {
+    if (!selectedJob && jobOptions[0]) setSelectedJob(jobOptions[0].value);
+  }, [jobOptions, selectedJob]);
 
   const handleStartAnalysis = async () => {
     setError('');
@@ -48,6 +51,7 @@ export default function ResumeScreening() {
         files: realFiles,
       });
       setResult(response);
+      invalidateHiringData(dispatch);
       navigate('/ai-analysis', {
         state: {
           fileCount: realFiles.length,

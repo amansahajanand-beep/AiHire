@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { User, Building2, Users, Bell, Plug, CreditCard } from 'lucide-react';
 import Card from '../components/ui/Card';
-import { currentUser } from '../data/mockData';
+import { getStoredUser } from '../api/config';
 import { getInitials } from '../utils/helpers';
 
 const settingsNav = [
@@ -14,12 +14,14 @@ const settingsNav = [
 ];
 
 export default function Settings() {
+  const storedUser = getStoredUser();
   const [activeSection, setActiveSection] = useState('profile');
   const [profile, setProfile] = useState({
-    name: 'Aman Sharma',
-    email: 'aman@company.com',
-    phone: '+91 98765-43210',
+    name: storedUser?.name || '',
+    email: storedUser?.email || '',
+    phone: '',
   });
+  const [companyName, setCompanyName] = useState(storedUser?.company || '');
   const [saved, setSaved] = useState(false);
 
   const handleSave = () => {
@@ -102,11 +104,11 @@ export default function Settings() {
               <div className="space-y-5 max-w-lg">
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Company Name</label>
-                  <input defaultValue={currentUser.company} className={inputClass} />
+                  <input value={companyName} onChange={(e) => setCompanyName(e.target.value)} className={inputClass} />
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Industry</label>
-                  <input defaultValue="Technology / SaaS" className={inputClass} />
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Client ID</label>
+                  <input value={storedUser?.client_id || '—'} readOnly className={inputClass + ' bg-slate-50 text-slate-500'} />
                 </div>
                 <button onClick={handleSave} className="px-8 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-semibold">Save Changes</button>
               </div>
@@ -117,11 +119,10 @@ export default function Settings() {
             <Card>
               <h3 className="text-base font-bold text-slate-900 mb-4">User Management</h3>
               <div className="space-y-3">
-                {[
-                  { name: 'Aman Sharma', email: 'aman@company.com', role: 'Admin' },
-                  { name: 'Mike Chen', email: 'mike@company.com', role: 'Recruiter' },
-                  { name: 'Lisa Park', email: 'lisa@company.com', role: 'Recruiter' },
-                ].map((user) => (
+                {(storedUser
+                  ? [{ name: storedUser.name, email: storedUser.email, role: 'Admin' }]
+                  : []
+                ).map((user) => (
                   <div key={user.email} className="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 bg-indigo-100 rounded-full flex items-center justify-center">
@@ -135,6 +136,9 @@ export default function Settings() {
                     <span className="text-xs font-medium text-slate-500 bg-white px-2 py-1 rounded border border-slate-200">{user.role}</span>
                   </div>
                 ))}
+                {!storedUser && (
+                  <p className="text-sm text-slate-400 py-4 text-center">Sign in to view account users.</p>
+                )}
               </div>
             </Card>
           )}

@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  FileSearch, UserCheck, Briefcase, Upload, Eye, XCircle, Calendar,
+  FileSearch, UserCheck, Briefcase, Upload, Eye, XCircle, Calendar, FileText,
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import FilterDropdown from '../components/ui/FilterDropdown';
-import { hiringActivities } from '../data/mockData';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { fetchHiringActivity } from '../store/slices/activitySlice';
 
-const iconMap = { FileSearch, UserCheck, Briefcase, Upload, Eye, XCircle };
+const iconMap = { FileSearch, UserCheck, Briefcase, Upload, Eye, XCircle, FileText };
 
 const typeColors = {
   screened: 'bg-violet-100 text-violet-600',
@@ -18,7 +19,9 @@ const typeColors = {
 };
 
 function formatFullTimestamp(ts) {
-  return new Date(ts).toLocaleString('en-GB', {
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -29,19 +32,27 @@ function formatFullTimestamp(ts) {
 }
 
 export default function HiringActivity() {
+  const dispatch = useAppDispatch();
   const [typeFilter, setTypeFilter] = useState('All');
+  const entry = useAppSelector((s) => s.activity.byType[typeFilter || 'All']);
+  const activities = entry?.items || [];
+  const loading = (!entry || entry.status === 'loading') && activities.length === 0;
 
-  const activities = [
-    { id: '1', type: 'screened', title: 'Resume screened', description: "John Smith's resume for Frontend Developer", user: 'AI', timestamp: '2024-05-20T10:30:00', icon: 'FileSearch' },
-    { id: '2', type: 'shortlisted', title: 'Candidate shortlisted', description: 'Sarah Lee shortlisted for UI/UX Designer', user: 'Admin', timestamp: '2024-05-19T14:15:00', icon: 'UserCheck' },
-    { id: '3', type: 'job', title: 'New job published', description: 'Backend Developer job published', user: 'Admin', timestamp: '2024-05-18T11:00:00', icon: 'Briefcase' },
-    { id: '4', type: 'upload', title: 'Resume uploaded', description: '5 new resumes uploaded for Senior Frontend Developer', user: 'Admin', timestamp: '2024-05-17T09:45:00', icon: 'Upload' },
-    { id: '5', type: 'review', title: 'Candidate moved to review', description: 'Alex Kumar moved to human review', user: 'Admin', timestamp: '2024-05-16T16:20:00', icon: 'Eye' },
-    { id: '6', type: 'rejected', title: 'Job closed', description: 'QA Engineer position closed', user: 'Admin', timestamp: '2024-05-15T12:00:00', icon: 'XCircle' },
-    ...hiringActivities.slice(0, 0),
-  ];
+  useEffect(() => {
+    dispatch(fetchHiringActivity({ type: typeFilter, limit: 100 }));
+  }, [dispatch, typeFilter]);
 
-  const filtered = typeFilter === 'All' ? activities : activities.filter((a) => a.type === typeFilter);
+  const dateRangeLabel = useMemo(() => {
+    if (!activities.length) return 'No activity yet';
+    const times = activities
+      .map((a) => new Date(a.timestamp).getTime())
+      .filter((t) => !Number.isNaN(t));
+    if (!times.length) return 'No activity yet';
+    const min = new Date(Math.min(...times));
+    const max = new Date(Math.max(...times));
+    const fmt = (d) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    return `${fmt(min)} - ${fmt(max)}`;
+  }, [activities]);
 
   return (
     <div className="space-y-6">
@@ -60,42 +71,50 @@ export default function HiringActivity() {
             { value: 'upload', label: 'Uploads' },
             { value: 'job', label: 'Jobs' },
             { value: 'review', label: 'Reviews' },
-            { value: 'rejected', label: 'Closed' },
+            { value: 'rejected', label: 'Closed / Rejected' },
           ]}
           onChange={setTypeFilter}
         />
         <div className="inline-flex items-center gap-2 px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm text-slate-600">
           <Calendar className="w-4 h-4 text-slate-400" />
-          01 May 2024 - 30 May 2024
+          {dateRangeLabel}
         </div>
       </div>
 
       <Card>
-        <div className="space-y-0">
-          {filtered.map((activity, index) => {
-            const Icon = iconMap[activity.icon] || FileSearch;
-            return (
-              <div key={activity.id} className="flex gap-4 relative">
-                {index < filtered.length - 1 && (
-                  <div className="absolute left-5 top-10 bottom-0 w-px bg-slate-100" />
-                )}
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${typeColors[activity.type] || 'bg-slate-100 text-slate-600'}`}>
-                  <Icon className="w-4 h-4" />
-                </div>
-                <div className="flex-1 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 pb-8">
-                  <div>
-                    <p className="text-sm font-semibold text-slate-900">{activity.title}</p>
-                    <p className="text-sm text-slate-500 mt-0.5">{activity.description}</p>
+        {loading ? (
+          <div className="py-12 text-center text-sm text-slate-400">Loading activity…</div>
+        ) : activities.length === 0 ? (
+          <div className="py-12 text-center text-sm text-slate-400">
+            No hiring activity yet. Create a job or upload resumes to get started.
+          </div>
+        ) : (
+          <div className="space-y-0">
+            {activities.map((activity, index) => {
+              const Icon = iconMap[activity.icon] || FileSearch;
+              return (
+                <div key={activity.id} className="flex gap-4 relative">
+                  {index < activities.length - 1 && (
+                    <div className="absolute left-5 top-10 bottom-0 w-px bg-slate-100" />
+                  )}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${typeColors[activity.type] || 'bg-slate-100 text-slate-600'}`}>
+                    <Icon className="w-4 h-4" />
                   </div>
-                  <div className="text-left sm:text-right shrink-0">
-                    <p className="text-xs text-slate-400">{formatFullTimestamp(activity.timestamp)}</p>
-                    <p className="text-xs font-medium text-indigo-600 mt-0.5">by {activity.user}</p>
+                  <div className="flex-1 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 pb-8">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{activity.title}</p>
+                      <p className="text-sm text-slate-500 mt-0.5">{activity.description}</p>
+                    </div>
+                    <div className="text-left sm:text-right shrink-0">
+                      <p className="text-xs text-slate-400">{formatFullTimestamp(activity.timestamp)}</p>
+                      <p className="text-xs font-medium text-indigo-600 mt-0.5">by {activity.user}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </Card>
     </div>
   );

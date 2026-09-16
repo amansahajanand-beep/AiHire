@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import String, Text, Integer, Float, DateTime, ForeignKey, JSON
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -63,6 +64,8 @@ class Candidate(Base):
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     resume_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    file_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resume_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     score: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="Pending")
     screening_status: Mapped[str] = mapped_column(String(50), default="queued")  # queued|processing|completed|failed
@@ -84,3 +87,36 @@ class Candidate(Base):
 
     owner: Mapped["User"] = relationship(back_populates="candidates")
     job: Mapped["Job"] = relationship(back_populates="candidates")
+
+
+class ScreenedProfile(Base):
+    """
+    Existing n8n / multitenant screening results table in Supabase.
+    Table name and column names must match production exactly.
+    """
+
+    __tablename__ = "Screened profile_Multitenent Profile screening"
+    __table_args__ = {"extend_existing": True}
+
+    row_id: Mapped[str] = mapped_column("row_id", UUID(as_uuid=False), primary_key=True, default=_uuid)
+    client_id: Mapped[str | None] = mapped_column("Client ID", Text, nullable=True, index=True)
+    timestamp: Mapped[str | None] = mapped_column("Timestamp", Text, nullable=True)
+    job_code: Mapped[str | None] = mapped_column("Job code", Text, nullable=True, index=True)
+    candidate_name: Mapped[str | None] = mapped_column("Candidate name", Text, nullable=True)
+    applied_role: Mapped[str | None] = mapped_column("Applied role", Text, nullable=True)
+    mobile_number: Mapped[str | None] = mapped_column("Mobile number", Text, nullable=True)
+    email: Mapped[str | None] = mapped_column("Email", Text, nullable=True)
+    current_location: Mapped[str | None] = mapped_column("Current location", Text, nullable=True)
+    experience_score: Mapped[str | None] = mapped_column("Experience Score", Text, nullable=True)
+    skill_score: Mapped[str | None] = mapped_column("Skill Score", Text, nullable=True)
+    stability_score: Mapped[str | None] = mapped_column("Stability Score", Text, nullable=True)
+    education_score: Mapped[str | None] = mapped_column("Education score", Text, nullable=True)
+    total_score: Mapped[str | None] = mapped_column("Total Score", Text, nullable=True)
+    growth_pattern: Mapped[str | None] = mapped_column("Growth Pattern", Text, nullable=True)
+    risk_flag: Mapped[str | None] = mapped_column("Risk Flag", Text, nullable=True)
+    my_recommendation: Mapped[str | None] = mapped_column("My Recommendation", Text, nullable=True)
+    summary: Mapped[str | None] = mapped_column("Summary", Text, nullable=True)
+    interview_questions: Mapped[str | None] = mapped_column("Interview Questions", Text, nullable=True)
+    ai_confident: Mapped[str | None] = mapped_column("AI confident", Text, nullable=True)
+    file_path: Mapped[str | None] = mapped_column("file_path", Text, nullable=True)
+    resume_url: Mapped[str | None] = mapped_column("Resume URL", Text, nullable=True)

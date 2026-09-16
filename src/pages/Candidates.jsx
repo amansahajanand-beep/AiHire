@@ -7,6 +7,7 @@ import CandidateTable from '../components/candidates/CandidateTable';
 import LoadingState from '../components/ui/LoadingState';
 import useCandidates from '../hooks/useCandidates';
 
+
 export default function Candidates() {
   const { candidates, jobOptions, statusOptions, loading, error, source } = useCandidates();
   const [search, setSearch] = useState('');
@@ -46,7 +47,7 @@ export default function Candidates() {
           <p className="text-slate-500 mt-1">View and manage all screened candidates.</p>
         </div>
         <span className="text-[11px] font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-500 uppercase tracking-wide">
-          {source || 'mock'}
+          {source || 'live'}
         </span>
       </div>
 

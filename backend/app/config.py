@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     n8n_resume_webhook_url: str = "https://xbm.app.n8n.cloud/webhook/resume-upload"
     n8n_api_key: str = "hireai-n8n-internal-key"
     max_resume_uploads: int = 5
+    supabase_url: str = "https://othkmsnxujuoqajrkrap.supabase.co"
+    supabase_service_role_key: str = ""
+    supabase_resume_bucket: str = "Resume"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

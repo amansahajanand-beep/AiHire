@@ -25,7 +25,7 @@ export default function Jobs() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-[11px] font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-500 uppercase tracking-wide">
-            {source || 'mock'}
+            {source || 'live'}
           </span>
           <button
             onClick={() => navigate('/jobs/create')}

@@ -1,23 +1,28 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.auth import generate_job_code
 from app.database import get_db
 from app.deps import get_current_user
-from app.models import Candidate, Job, User
+from app.models import Job, ScreenedProfile, User
 from app.schemas import JobCreate, JobOut, JobRequirementOut, JobUpdate
+from app.screening_profiles import parse_score_value
 
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
 
 
 def _job_out(job: Job, db: Session) -> JobOut:
-    count = db.query(func.count(Candidate.id)).filter(Candidate.job_id == job.id).scalar() or 0
-    avg = (
-        db.query(func.avg(Candidate.score))
-        .filter(Candidate.job_id == job.id, Candidate.score.isnot(None))
-        .scalar()
+    rows = (
+        db.query(ScreenedProfile)
+        .filter(
+            ScreenedProfile.client_id == job.client_id,
+            ScreenedProfile.job_code == job.job_code,
+        )
+        .all()
     )
+    scores = [parse_score_value(r.total_score) for r in rows]
+    scores = [s for s in scores if s is not None]
+    avg = round(sum(scores) / len(scores), 1) if scores else 0.0
     return JobOut(
         id=job.id,
         job_code=job.job_code,
@@ -32,8 +37,8 @@ def _job_out(job: Job, db: Session) -> JobOut:
         responsibilities=job.responsibilities,
         qualifications=job.qualifications,
         status=job.status,
-        candidates=int(count),
-        avgScore=round(float(avg or 0), 1),
+        candidates=len(rows),
+        avgScore=avg,
         created_at=job.created_at,
     )
 

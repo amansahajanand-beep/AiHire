@@ -1,37 +1,39 @@
-import { useCallback, useEffect, useState } from 'react';
-import { listJobs, createJob } from '../api/jobs';
+import { useCallback, useEffect } from 'react';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { createJobThunk, fetchJobs } from '../store/slices/jobsSlice';
+import { invalidateHiringData } from '../store';
 
 export default function useJobs() {
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [source, setSource] = useState('mock');
+  const dispatch = useAppDispatch();
+  const { items, status, error, source, fetchedAt } = useAppSelector((s) => s.jobs);
+
+  const loading = (status === 'loading' || status === 'idle') && items.length === 0;
 
   const reload = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await listJobs();
-      setJobs(result.jobs || []);
-      setSource(result.source);
-      return result;
-    } catch (err) {
-      setError(err);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    return dispatch(fetchJobs({ force: true })).unwrap();
+  }, [dispatch]);
 
-  const addJob = useCallback(async (payload) => {
-    const result = await createJob(payload);
-    await reload();
-    return result;
-  }, [reload]);
+  const addJob = useCallback(
+    async (payload) => {
+      const result = await dispatch(createJobThunk(payload)).unwrap();
+      invalidateHiringData(dispatch);
+      await dispatch(fetchJobs({ force: true }));
+      return result;
+    },
+    [dispatch]
+  );
 
   useEffect(() => {
-    reload().catch(() => {});
-  }, [reload]);
+    dispatch(fetchJobs());
+  }, [dispatch]);
 
-  return { jobs, loading, error, source, reload, addJob };
+  return {
+    jobs: items,
+    loading,
+    error: error ? { message: error } : null,
+    source: source || 'live',
+    reload,
+    addJob,
+    fetchedAt,
+  };
 }

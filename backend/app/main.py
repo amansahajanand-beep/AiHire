@@ -1,13 +1,33 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 
 from app.config import get_settings
 from app.database import Base, engine
+from app import models  # noqa: F401 — register ORM models
 from app.routers import auth, jobs, screening, internal
 
 settings = get_settings()
 
 Base.metadata.create_all(bind=engine)
+
+
+def _ensure_candidate_storage_columns() -> None:
+    """Add resume storage columns to candidates if missing (Postgres)."""
+    statements = [
+        'ALTER TABLE candidates ADD COLUMN IF NOT EXISTS file_path TEXT',
+        'ALTER TABLE candidates ADD COLUMN IF NOT EXISTS resume_url TEXT',
+    ]
+    with engine.begin() as conn:
+        for sql in statements:
+            try:
+                conn.execute(text(sql))
+            except Exception:
+                # sqlite / older engines may not support IF NOT EXISTS the same way
+                pass
+
+
+_ensure_candidate_storage_columns()
 
 app = FastAPI(
     title=settings.app_name,

@@ -1,87 +1,57 @@
+import { useEffect, useMemo } from 'react';
 import Card, { CardHeader } from '../ui/Card';
-import { hiringPipeline } from '../../data/mockData';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { fetchHiringPipeline } from '../../store/slices/dashboardSlice';
 
 export default function HiringPipeline() {
-  const stages = hiringPipeline;
-  const segmentH = 44;
-  const gap = 10;
-  const svgW = 280;
-  const topW = 268;
-  const bottomW = 96;
-  const totalH = stages.length * segmentH + (stages.length - 1) * gap;
-  const centerX = svgW / 2;
+  const dispatch = useAppDispatch();
+  const stages = useAppSelector((s) => s.dashboard.pipeline);
+  const status = useAppSelector((s) => s.dashboard.pipelineStatus);
+  const fetchedAt = useAppSelector((s) => s.dashboard.pipelineFetchedAt);
+  const loading = status === 'loading' && !fetchedAt;
 
-  const widthAt = (t) => topW + (bottomW - topW) * t;
+  useEffect(() => {
+    dispatch(fetchHiringPipeline());
+  }, [dispatch]);
+
+  const maxCount = useMemo(
+    () => Math.max(1, ...stages.map((s) => s.count || 0)),
+    [stages]
+  );
+  const inProgress = stages[0]?.count ?? stages.reduce((sum, s) => sum + (s.count || 0), 0);
 
   return (
-    <Card>
-      <CardHeader title="Hiring Pipeline" />
+    <Card className="!rounded-2xl">
+      <CardHeader
+        title="Hiring Pipeline"
+        subtitle={`${inProgress} candidates in progress`}
+      />
 
-      <div className="flex items-start justify-center gap-4 pt-2">
-        <svg
-          viewBox={`0 0 ${svgW} ${totalH}`}
-          className="w-full max-w-[260px] h-auto"
-          role="img"
-          aria-label="Hiring pipeline funnel"
-        >
-          <defs>
-            {stages.map((stage, i) => (
-              <linearGradient key={`g-${stage.stage}`} id={`funnel-${i}`} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={stage.color} stopOpacity="1" />
-                <stop offset="100%" stopColor={stage.color} stopOpacity="0.88" />
-              </linearGradient>
-            ))}
-          </defs>
-
-          {stages.map((stage, i) => {
-            const y = i * (segmentH + gap);
-            const t0 = i / stages.length;
-            const t1 = (i + 1) / stages.length;
-            const w0 = widthAt(t0);
-            const w1 = widthAt(t1);
-            const xl0 = centerX - w0 / 2;
-            const xr0 = centerX + w0 / 2;
-            const xl1 = centerX - w1 / 2;
-            const xr1 = centerX + w1 / 2;
-
+      {loading ? (
+        <div className="py-16 text-center text-sm text-slate-400">Loading pipeline…</div>
+      ) : stages.length === 0 ? (
+        <div className="py-16 text-center text-sm text-slate-400">No pipeline data yet.</div>
+      ) : (
+        <div className="space-y-4 pt-1">
+          {stages.map((stage) => {
+            const width = Math.max(6, Math.round(((stage.count || 0) / maxCount) * 100));
             return (
-              <g key={stage.stage}>
-                <path
-                  d={`M ${xl0} ${y} L ${xr0} ${y} L ${xr1} ${y + segmentH} L ${xl1} ${y + segmentH} Z`}
-                  fill={`url(#funnel-${i})`}
-                  rx="8"
-                />
-                <text
-                  x={centerX}
-                  y={y + segmentH / 2 + 1}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fill="#fff"
-                  fontSize="13"
-                  fontWeight="600"
-                  fontFamily="Inter, ui-sans-serif, system-ui, sans-serif"
-                >
-                  {stage.stage}
-                </text>
-              </g>
+              <div key={stage.stage}>
+                <div className="flex items-center justify-between gap-3 mb-1.5">
+                  <p className="text-sm font-medium text-slate-700">{stage.stage}</p>
+                  <p className="text-sm font-semibold text-slate-900 tabular-nums">{stage.count}</p>
+                </div>
+                <div className="h-2.5 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${width}%`, backgroundColor: stage.color || '#6366F1' }}
+                  />
+                </div>
+              </div>
             );
           })}
-        </svg>
-
-        <div className="flex flex-col shrink-0" style={{ gap: `${gap}px` }}>
-          {stages.map((stage) => (
-            <div
-              key={stage.stage}
-              className="flex items-center justify-end pr-1"
-              style={{ height: segmentH }}
-            >
-              <span className="text-sm font-bold text-slate-800 tabular-nums">
-                {stage.count}
-              </span>
-            </div>
-          ))}
         </div>
-      </div>
+      )}
     </Card>
   );
 }

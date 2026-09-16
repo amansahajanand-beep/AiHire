@@ -8,8 +8,11 @@ import Card from '../components/ui/Card';
 import MatchScoreRing from '../components/candidates/MatchScoreRing';
 import MatchBreakdown from '../components/candidates/MatchBreakdown';
 import LoadingState from '../components/ui/LoadingState';
-import { getCandidate, updateCandidateWorkflow } from '../api/candidates';
 import { getInitials, formatDate } from '../utils/helpers';
+import { useAppDispatch, useAppSelector } from '../store/hooks';
+import { fetchCandidateById, patchCandidateWorkflow } from '../store/slices/candidatesSlice';
+import { invalidateDashboard } from '../store/slices/dashboardSlice';
+import { invalidateActivity } from '../store/slices/activitySlice';
 
 const tabs = [
   { id: 'overview', label: 'Overview' },
@@ -23,29 +26,28 @@ const tabs = [
 export default function CandidateDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const [activeTab, setActiveTab] = useState('ai-analysis');
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [candidate, setCandidate] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const entry = useAppSelector((s) => s.candidates.byId[id]);
+  const candidate = entry?.data || null;
+  const loading = (!entry || entry.status === 'loading') && !candidate;
+  const error = entry?.error || '';
 
   useEffect(() => {
-    setLoading(true);
-    getCandidate(id)
-      .then(setCandidate)
-      .catch((err) => setError(err.message || 'Failed to load candidate'))
-      .finally(() => setLoading(false));
-  }, [id]);
+    if (id) dispatch(fetchCandidateById({ id }));
+  }, [dispatch, id]);
 
   const handleAction = async (evaluation) => {
     setActionsOpen(false);
     setSaving(true);
     try {
-      const updated = await updateCandidateWorkflow(id, { humanEvaluation: evaluation });
-      setCandidate(updated);
+      await dispatch(patchCandidateWorkflow({ id, payload: { humanEvaluation: evaluation } })).unwrap();
+      dispatch(invalidateDashboard());
+      dispatch(invalidateActivity());
     } catch (err) {
-      setError(err.message || 'Update failed');
+      // error stored on slice; surface via entry
     } finally {
       setSaving(false);
     }
@@ -68,12 +70,14 @@ export default function CandidateDetails() {
     ? candidate.strengths
     : candidate.screeningStatus !== 'completed'
       ? ['Screening in progress via n8n...']
-      : ['No strengths returned yet'];
+      : ['See AI Summary below'];
   const weaknesses = candidate.weaknesses?.length
     ? candidate.weaknesses
     : candidate.screeningStatus !== 'completed'
       ? ['Waiting for n8n screening result']
-      : ['No weak areas returned yet'];
+      : candidate.risk
+        ? [`Risk flag: ${candidate.risk}`]
+        : ['No weak areas returned yet'];
   const screenedOn = candidate.screenedOn ? formatDate(candidate.screenedOn) : '—';
   const showAnalysis = activeTab === 'overview' || activeTab === 'ai-analysis';
 
@@ -103,8 +107,14 @@ export default function CandidateDetails() {
               <span>
                 Screened on: <span className="text-slate-600 font-medium">{screenedOn}</span>
               </span>
+              {candidate.location && (
+                <>
+                  <span className="hidden sm:inline text-slate-300">·</span>
+                  <span className="text-slate-600">{candidate.location}</span>
+                </>
+              )}
               <span className="hidden sm:inline text-slate-300">·</span>
-              <span className="text-indigo-600 font-medium">{candidate.screeningStatus}</span>
+              <span className="text-indigo-600 font-medium">{candidate.status || candidate.screeningStatus}</span>
             </div>
           </div>
         </div>
@@ -158,10 +168,19 @@ export default function CandidateDetails() {
             <div className="flex flex-col items-center pb-2">
               <MatchScoreRing score={candidate.score || 0} size={176} />
               <p className="text-sm text-slate-500 mt-3 text-center max-w-xs leading-relaxed">
-                {candidate.remarks || (candidate.score >= 85
-                  ? 'This candidate is an excellent match for the job requirements.'
-                  : 'AI screening result from live n8n workflow.')}
+                {candidate.status || candidate.humanEvaluation || 'Screened profile'}
               </p>
+              <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs">
+                {candidate.risk && (
+                  <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">Risk: {candidate.risk}</span>
+                )}
+                {candidate.aiConfidence && (
+                  <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600">AI: {candidate.aiConfidence}</span>
+                )}
+                {candidate.availability && (
+                  <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">{candidate.availability}</span>
+                )}
+              </div>
             </div>
           </Card>
 
@@ -193,6 +212,31 @@ export default function CandidateDetails() {
               ))}
             </ul>
           </Card>
+
+          {(candidate.summary || candidate.growthPattern) && (
+            <Card className="!p-6 lg:col-span-2">
+              <h3 className="text-base font-bold text-slate-900 mb-3">AI Summary</h3>
+              {candidate.growthPattern && (
+                <p className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 mb-3">
+                  Growth: {candidate.growthPattern}
+                </p>
+              )}
+              <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">
+                {candidate.summary || candidate.remarks}
+              </p>
+            </Card>
+          )}
+
+          {(candidate.interviewQuestions || []).length > 0 && (
+            <Card className="!p-6 lg:col-span-2">
+              <h3 className="text-base font-bold text-slate-900 mb-4">Interview Questions</h3>
+              <ol className="space-y-3 list-decimal list-inside">
+                {candidate.interviewQuestions.map((q) => (
+                  <li key={q} className="text-sm text-slate-600 leading-snug">{q}</li>
+                ))}
+              </ol>
+            </Card>
+          )}
         </div>
       )}
 
@@ -202,7 +246,18 @@ export default function CandidateDetails() {
           <p className="text-sm text-slate-500 mb-6">{candidate.resumeFilename || 'No file name'}</p>
           <div className="bg-slate-50 rounded-xl p-10 text-center border border-slate-100">
             <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <p className="text-sm text-slate-500">Resume was sent to n8n for screening.</p>
+            {candidate.resumeUrl ? (
+              <a
+                href={candidate.resumeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+              >
+                Open Resume URL
+              </a>
+            ) : (
+              <p className="text-sm text-slate-500">Resume screened via n8n. URL not available yet.</p>
+            )}
           </div>
         </Card>
       )}

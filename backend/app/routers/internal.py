@@ -5,8 +5,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_n8n_api_key
-from app.models import Candidate, Job, User
-from app.schemas import JobRequirementOut, ScreeningResultIn, CandidateOut
+from app.models import Candidate, Job, ScreenedProfile, User
+from app.schemas import CandidateOut, JobRequirementOut, ScreeningResultIn
+from app.screening_profiles import apply_screening_payload, parse_score_value, screened_to_candidate_dict
 
 router = APIRouter(prefix="/api/internal", tags=["n8n Internal"])
 
@@ -23,7 +24,6 @@ def n8n_get_job_requirements(job_id: str, db: Session = Depends(get_db)):
     """
     job = db.query(Job).filter(Job.id == job_id).first()
     if not job:
-        # also allow lookup by job_code
         job = db.query(Job).filter(Job.job_code == job_id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -51,75 +51,69 @@ def n8n_get_job_requirements(job_id: str, db: Session = Depends(get_db)):
 )
 def n8n_save_screening_result(payload: ScreeningResultIn, db: Session = Depends(get_db)):
     """
-    n8n posts LLM screening result back into dashboard DB.
-    Prefer updating an existing candidate_id created at upload time.
+    n8n posts LLM screening result into Screened profile_Multitenent Profile screening.
     """
-    job = db.query(Job).filter(Job.id == payload.job_id, Job.client_id == payload.client_id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found for this client_id")
+    data = payload.as_profile_payload()
+    client_id = data.get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=400, detail="client_id is required")
 
-    user = db.query(User).filter(User.client_id == payload.client_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Client not found")
+    user = db.query(User).filter(User.client_id == client_id).first()
 
-    candidate = None
-    if payload.candidate_id:
-        candidate = (
-            db.query(Candidate)
-            .filter(
-                Candidate.id == payload.candidate_id,
-                Candidate.client_id == payload.client_id,
-                Candidate.job_id == job.id,
-            )
-            .first()
-        )
+    job = None
+    if payload.job_id:
+        job = db.query(Job).filter(Job.id == payload.job_id, Job.client_id == client_id).first()
+    if not job and data.get("job_code"):
+        job = db.query(Job).filter(Job.job_code == data["job_code"], Job.client_id == client_id).first()
+    if job and not data.get("job_code"):
+        data["job_code"] = job.job_code
+    if job and not data.get("applied_role"):
+        data["applied_role"] = job.title
 
-    if not candidate:
-        candidate = Candidate(
-            user_id=user.id,
-            client_id=payload.client_id,
-            job_id=job.id,
-        )
-        db.add(candidate)
+    profile = None
+    if payload.row_id:
+        profile = db.query(ScreenedProfile).filter(ScreenedProfile.row_id == payload.row_id).first()
 
-    candidate.name = payload.name or candidate.name
-    candidate.email = payload.email or candidate.email
-    candidate.phone = payload.phone or candidate.phone
-    candidate.resume_filename = payload.resume_filename or candidate.resume_filename
-    candidate.score = payload.score
-    candidate.status = payload.status or candidate.status or "Pending"
-    candidate.strengths = payload.strengths
-    candidate.weaknesses = payload.weaknesses
-    candidate.breakdown = payload.breakdown
-    candidate.remarks = payload.remarks
-    candidate.risk = payload.risk
-    candidate.raw_result = payload.raw_result
-    candidate.screening_status = payload.screening_status or "completed"
-    candidate.screened_on = datetime.utcnow()
+    if not profile:
+        profile = ScreenedProfile()
+        db.add(profile)
 
+    if not data.get("timestamp"):
+        data["timestamp"] = datetime.utcnow().isoformat()
+
+    apply_screening_payload(profile, data)
     db.commit()
-    db.refresh(candidate)
+    db.refresh(profile)
 
-    return CandidateOut(
-        id=candidate.id,
-        job_id=candidate.job_id,
-        client_id=candidate.client_id,
-        name=candidate.name,
-        email=candidate.email,
-        phone=candidate.phone,
-        job=job.title,
-        score=candidate.score,
-        status=candidate.status,
-        screening_status=candidate.screening_status,
-        resume_filename=candidate.resume_filename,
-        strengths=candidate.strengths,
-        weaknesses=candidate.weaknesses,
-        breakdown=candidate.breakdown,
-        remarks=candidate.remarks,
-        risk=candidate.risk,
-        human_evaluation=candidate.human_evaluation,
-        human_note=candidate.human_note,
-        availability=candidate.availability,
-        screened_on=candidate.screened_on,
-        created_at=candidate.created_at,
-    )
+    # Mark matching queued Candidate as completed when candidate_id provided
+    if payload.candidate_id:
+        candidate = db.query(Candidate).filter(Candidate.id == payload.candidate_id).first()
+        if candidate:
+            candidate.screening_status = payload.screening_status or "completed"
+            candidate.name = profile.candidate_name or candidate.name
+            candidate.email = profile.email or candidate.email
+            candidate.phone = profile.mobile_number or candidate.phone
+            candidate.score = parse_score_value(profile.total_score)
+            candidate.risk = profile.risk_flag
+            candidate.remarks = profile.summary
+            candidate.status = profile.my_recommendation or candidate.status
+            candidate.screened_on = datetime.utcnow()
+            # Prefer already-stored bucket path/url from upload time
+            if not profile.file_path and candidate.file_path:
+                profile.file_path = candidate.file_path
+            if not profile.resume_url and candidate.resume_url:
+                profile.resume_url = candidate.resume_url
+            if candidate.file_path is None and profile.file_path:
+                candidate.file_path = profile.file_path
+            if candidate.resume_url is None and profile.resume_url:
+                candidate.resume_url = profile.resume_url
+            db.commit()
+            db.refresh(profile)
+
+    out = screened_to_candidate_dict(profile, job.title if job else None)
+    if job:
+        out["job_id"] = job.id
+        out["job"] = job.title
+    if user and not out.get("client_id"):
+        out["client_id"] = user.client_id
+    return CandidateOut(**out)
