@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import {
   Eye, EyeOff, Hexagon, Upload, FileSearch, Zap, UserCheck, LayoutDashboard,
 } from 'lucide-react';
@@ -7,6 +7,8 @@ import { login } from '../api/auth';
 
 export default function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = location.state?.from || '/dashboard';
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,7 +21,7 @@ export default function Login() {
     setLoading(true);
     try {
       await login({ email, password });
-      navigate('/dashboard');
+      navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err.message || 'Login failed');
     } finally {

@@ -1,5 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
+import ProtectedRoute from './components/auth/ProtectedRoute';
+import GuestRoute from './components/auth/GuestRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -17,21 +19,28 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route element={<AppLayout />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/candidates" element={<Candidates />} />
-          <Route path="/candidates/:id" element={<CandidateDetails />} />
-          <Route path="/jobs" element={<Jobs />} />
-          <Route path="/jobs/create" element={<CreateJob />} />
-          <Route path="/resume-screening" element={<ResumeScreening />} />
-          <Route path="/ai-analysis" element={<AIAnalysisProgress />} />
-          <Route path="/automation" element={<AutomationSolutions />} />
-          <Route path="/hiring-activity" element={<HiringActivity />} />
-          <Route path="/settings" element={<Settings />} />
+        <Route element={<GuestRoute />}>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
         </Route>
+
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/candidates" element={<Candidates />} />
+            <Route path="/candidates/:id" element={<CandidateDetails />} />
+            <Route path="/jobs" element={<Jobs />} />
+            <Route path="/jobs/create" element={<CreateJob />} />
+            <Route path="/resume-screening" element={<ResumeScreening />} />
+            <Route path="/ai-analysis" element={<AIAnalysisProgress />} />
+            <Route path="/automation" element={<AutomationSolutions />} />
+            <Route path="/hiring-activity" element={<HiringActivity />} />
+            <Route path="/settings" element={<Settings />} />
+          </Route>
+        </Route>
+
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </BrowserRouter>
   );

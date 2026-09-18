@@ -21,6 +21,10 @@ async function parseResponse(res) {
   if (!res.ok) {
     if (res.status === 401) {
       clearAuthSession();
+      // Send expired/invalid sessions back to login (skip if already there)
+      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+        window.location.assign('/login');
+      }
     }
     const detail = data?.detail;
     const message = typeof detail === 'string'
