@@ -18,14 +18,10 @@ export default function HiringPipeline() {
     () => Math.max(1, ...stages.map((s) => s.count || 0)),
     [stages]
   );
-  const inProgress = stages[0]?.count ?? stages.reduce((sum, s) => sum + (s.count || 0), 0);
 
   return (
     <Card className="!rounded-2xl">
-      <CardHeader
-        title="Hiring Pipeline"
-        subtitle={`${inProgress} candidates in progress`}
-      />
+      <CardHeader title="Hiring Pipeline" />
 
       {loading ? (
         <div className="py-16 text-center text-sm text-slate-400">Loading pipeline…</div>

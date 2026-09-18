@@ -1,4 +1,4 @@
-export default function MatchScoreRing({ score, size = 180, label = 'Excellent Match' }) {
+export default function MatchScoreRing({ score, size = 180, label = 'Excellent Match', showLabel = true }) {
   const strokeWidth = 12;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -38,7 +38,9 @@ export default function MatchScoreRing({ score, size = 180, label = 'Excellent M
           <span className="text-sm font-medium text-slate-400 mt-1">/100</span>
         </div>
       </div>
-      <p className={`mt-4 text-base font-bold ${labelColor}`}>{label || statusLabel}</p>
+      {showLabel ? (
+        <p className={`mt-4 text-base font-bold ${labelColor}`}>{label || statusLabel}</p>
+      ) : null}
     </div>
   );
 }

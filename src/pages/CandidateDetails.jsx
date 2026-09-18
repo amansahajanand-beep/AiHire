@@ -23,6 +23,15 @@ const tabs = [
   { id: 'skills', label: 'Skills' },
 ];
 
+function formatScreenedTime(dateStr) {
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '';
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  const ss = String(d.getSeconds()).padStart(2, '0');
+  return `${hh}:${mm}:${ss}`;
+}
+
 export default function CandidateDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -79,6 +88,7 @@ export default function CandidateDetails() {
         ? [`Risk flag: ${candidate.risk}`]
         : ['No weak areas returned yet'];
   const screenedOn = candidate.screenedOn ? formatDate(candidate.screenedOn) : '—';
+  const screenedTime = candidate.screenedOn ? formatScreenedTime(candidate.screenedOn) : '';
   const showAnalysis = activeTab === 'overview' || activeTab === 'ai-analysis';
 
   return (
@@ -106,6 +116,11 @@ export default function CandidateDetails() {
               <span className="hidden sm:inline text-slate-300">·</span>
               <span>
                 Screened on: <span className="text-slate-600 font-medium">{screenedOn}</span>
+                {screenedTime ? (
+                  <span className="ml-4">
+                    Time: <span className="text-slate-600 font-medium">{screenedTime}</span>
+                  </span>
+                ) : null}
               </span>
               {candidate.location && (
                 <>
@@ -166,21 +181,10 @@ export default function CandidateDetails() {
           <Card className="!p-6">
             <h3 className="text-base font-bold text-slate-900 mb-6">AI Match Score</h3>
             <div className="flex flex-col items-center pb-2">
-              <MatchScoreRing score={candidate.score || 0} size={176} />
+              <MatchScoreRing score={candidate.score || 0} size={176} showLabel={false} />
               <p className="text-sm text-slate-500 mt-3 text-center max-w-xs leading-relaxed">
                 {candidate.status || candidate.humanEvaluation || 'Screened profile'}
               </p>
-              <div className="mt-3 flex flex-wrap justify-center gap-2 text-xs">
-                {candidate.risk && (
-                  <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">Risk: {candidate.risk}</span>
-                )}
-                {candidate.aiConfidence && (
-                  <span className="px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-600">AI: {candidate.aiConfidence}</span>
-                )}
-                {candidate.availability && (
-                  <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700">{candidate.availability}</span>
-                )}
-              </div>
             </div>
           </Card>
 

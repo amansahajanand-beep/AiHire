@@ -7,6 +7,15 @@ const labels = {
   overall: 'Overall',
 };
 
+const weightage = {
+  skills: 40,
+  experience: 30,
+  education: 15,
+  stability: 15,
+  keywords: 15,
+  overall: 100,
+};
+
 function barStyle(key, value) {
   if (key === 'education' || key === 'keywords') {
     return { bar: '#FBBF24', text: 'text-amber-500' };
@@ -27,6 +36,7 @@ export default function MatchBreakdown({ breakdown }) {
     <div className="space-y-5">
       {entries.map(([key, value]) => {
         const style = barStyle(key, value);
+        const max = weightage[key] ?? 100;
         return (
           <div key={key} className="flex items-center gap-4">
             <span className="text-sm text-slate-600 w-24 shrink-0">{labels[key] || key}</span>
@@ -36,8 +46,8 @@ export default function MatchBreakdown({ breakdown }) {
                 style={{ width: `${Math.min(Math.max(value, 0), 100)}%`, backgroundColor: style.bar }}
               />
             </div>
-            <span className={`text-sm font-bold w-10 text-right tabular-nums ${style.text}`}>
-              {Math.round(value)}%
+            <span className={`text-sm font-bold w-16 text-right tabular-nums ${style.text}`}>
+              {Math.round(value)} / {max}
             </span>
           </div>
         );

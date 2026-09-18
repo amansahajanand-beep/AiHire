@@ -43,3 +43,88 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #94A3B8;
 }
+
+/* Dashboard stat cards: prevent inner text overlap at mid-desktop widths only. */
+@media (min-width: 1230px) and (max-width: 1627px) {
+  .dashboard-stat-card .stat-card-body {
+    flex: 1 1 0%;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .dashboard-stat-card .stat-card-title {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    font-size: 0.75rem;
+    line-height: 1.35;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+  }
+
+  .dashboard-stat-card .stat-card-value {
+    font-size: 1.5rem;
+    line-height: 1.2;
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
+
+  .dashboard-stat-card .stat-card-meta {
+    flex-wrap: wrap;
+    font-size: 0.6875rem;
+    line-height: 1.35;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+  }
+
+  .dashboard-stat-card .stat-card-heading {
+    flex: 1 1 0%;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    min-width: 0;
+    max-width: 100%;
+    row-gap: 0.25rem;
+  }
+
+  .dashboard-stat-card .stat-card-heading-label {
+    font-size: 0.75rem;
+    line-height: 1.3;
+    overflow-wrap: break-word;
+    max-width: 100%;
+  }
+
+  .dashboard-stat-card .stat-card-badge {
+    font-size: 0.5rem;
+    line-height: 1.25;
+    max-width: 100%;
+  }
+
+  .dashboard-stat-card .stat-card-metrics {
+    gap: 0.25rem;
+    align-items: start;
+  }
+
+  .dashboard-stat-card .stat-card-metrics > * {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .dashboard-stat-card .stat-card-metric-value {
+    font-size: 0.625rem;
+    line-height: 1.25;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  .dashboard-stat-card .stat-card-metric-label {
+    font-size: 0.5625rem;
+    line-height: 1.3;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    max-width: 100%;
+    margin-top: 0.25rem;
+  }
+}
