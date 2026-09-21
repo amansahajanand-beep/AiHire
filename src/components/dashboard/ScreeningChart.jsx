@@ -16,7 +16,7 @@ import { fetchScreeningOverview } from '../../store/slices/dashboardSlice';
 const SERIES = [
   { key: 'screened', name: 'Screened', color: '#6366F1', fillId: 'fillScreened' },
   { key: 'shortlisted', name: 'Shortlisted', color: '#34D399', fillId: 'fillShortlisted' },
-  { key: 'hired', name: 'Hired', color: '#60A5FA', fillId: 'fillHired' },
+  { key: 'hired', name: 'Hired', color: '#60A5FA', fillId: 'fillHired'    },
 ];
 
 function ChartTooltip({ active, payload, label }) {
