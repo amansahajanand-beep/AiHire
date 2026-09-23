@@ -4,6 +4,9 @@ import ProtectedRoute from './components/auth/ProtectedRoute';
 import GuestRoute from './components/auth/GuestRoute';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Landing from './pages/Landing';
+import Pricing from './pages/Pricing';
+import PublicLayout from './components/public/PublicLayout';
 import Dashboard from './pages/Dashboard';
 import Candidates from './pages/Candidates';
 import CandidateDetails from './pages/CandidateDetails';
@@ -20,13 +23,16 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route element={<GuestRoute />}>
+          <Route element={<PublicLayout />}>
+            <Route path="/" element={<Landing />} />
+            <Route path="/pricing" element={<Pricing />} />
+          </Route>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Route>
 
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/candidates" element={<Candidates />} />
             <Route path="/candidates/:id" element={<CandidateDetails />} />

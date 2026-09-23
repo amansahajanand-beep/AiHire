@@ -128,3 +128,27 @@ body {
     margin-top: 0.25rem;
   }
 }
+
+.homepage-reveal .home-reveal {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 1.25s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms),
+    transform 1.25s cubic-bezier(0.22, 1, 0.36, 1) var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+.homepage-reveal .home-reveal.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homepage-reveal .home-reveal,
+  .homepage-reveal .home-reveal.is-revealed {
+    opacity: 1;
+    transform: none;
+    transition: none;
+    will-change: auto;
+  }
+}
