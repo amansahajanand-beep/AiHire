@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Hexagon, ShieldCheck, Cpu, Rocket } from 'lucide-react';
+import { Eye, EyeOff, ShieldCheck, Cpu, Rocket } from 'lucide-react';
 import { register } from '../api/auth';
+import logo from '../assets/logo.png';
 
 export default function Register() {
   const navigate = useNavigate();
@@ -36,13 +37,14 @@ export default function Register() {
       {/* Left — Form */}
       <div className="flex-1 flex items-center justify-center p-8 sm:p-12">
         <div className="w-full max-w-md">
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-              <Hexagon className="w-5 h-5 text-white fill-white/20" />
-            </div>
-            <span className="text-xl font-bold text-slate-900">HireAI</span>
+          <div className="mb-1">
+            <img
+              src={logo}
+              alt="HireAI"
+              className="h-9 w-auto max-w-[160px] object-contain"
+            />
           </div>
-          <p className="text-sm text-slate-400 mb-8 ml-11 -mt-1">AI-Powered Hiring Intelligence</p>
+          <p className="text-sm text-slate-400 mb-8">AI-Powered Hiring Intelligence</p>
 
           <h1 className="text-3xl font-bold text-slate-900 mb-1">Create your account</h1>
           <p className="text-slate-500 mb-8">Get started with your free account</p>

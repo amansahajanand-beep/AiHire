@@ -6,6 +6,7 @@ import {
 import { logout } from '../../api/auth';
 import { useAppDispatch } from '../../store/hooks';
 import { resetHiringData } from '../../store';
+import logo from '../../assets/logo.png';
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -41,15 +42,16 @@ export default function AppSidebar({ isOpen, onClose }) {
         }`}
       >
         <div className="flex flex-col h-full">
-          <div className="flex items-start justify-between gap-2 px-5 pt-6 pb-4">
-            <div>
-              <p className="text-xl font-bold text-indigo-600 tracking-tight leading-none">HireAI</p>
-              <p className="text-[10px] font-semibold tracking-[0.14em] text-slate-400 mt-1.5 uppercase">
-                Recruitment OS
-              </p>
+          <div className="flex items-center justify-between gap-2 px-5 pt-6 pb-4">
+            <div className="min-w-0 flex-1">
+              <img
+                src={logo}
+                alt="HireScope"
+                className="h-11 w-auto max-w-full object-contain object-left"
+              />
             </div>
             {onClose && (
-              <button onClick={onClose} className="lg:hidden p-1 text-slate-400 hover:text-slate-700">
+              <button onClick={onClose} className="lg:hidden p-1 text-slate-400 hover:text-slate-700 shrink-0">
                 <X className="w-5 h-5" />
               </button>
             )}

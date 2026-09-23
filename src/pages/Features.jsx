@@ -129,7 +129,8 @@ export default function Features() {
           </div>
         </div>
 
-        {featureCards.map(({ icon: Icon, title, body }) => (
+        {featureCards.map(({ icon: Icon, title, body }) => 
+        (
           <div key={title} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center mb-4">
               <Icon className="w-5 h-5 text-indigo-600" />

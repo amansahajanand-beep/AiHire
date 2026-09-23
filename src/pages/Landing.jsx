@@ -123,10 +123,10 @@ export default function Landing() {
       <div id="home-intro">
       <div className="text-center">
         <h1 className="home-reveal text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 tracking-tight leading-tight">
-          Hire smarter. Screen candidates faster.
+          Screen Hundreds of Resumes in Minutes
         </h1>
         <p className="home-reveal text-slate-500 mt-5 text-base sm:text-lg leading-relaxed max-w-2xl mx-auto">
-          HireScope transforms job requirements and candidate resumes into AI-powered hiring intelligence, helping recruiters screen candidates faster and make informed hiring decisions.
+          Powered by AI hiring intelligence that turns every resume into a clear candidate score, actionable insights, and interview-ready recommendations
         </p>
         <div className="home-reveal flex flex-wrap items-center justify-center gap-3 mt-8">
           <Link
