@@ -24,6 +24,7 @@ from app.schemas import (
 )
 from app.screening_profiles import (
     apply_screening_payload,
+    build_profile_details,
     parse_score_value,
     parse_timestamp,
     screened_to_candidate_dict,
@@ -38,8 +39,22 @@ def _candidate_out_from_dict(data: dict) -> CandidateOut:
     return CandidateOut(**data)
 
 
+def _profile_details_from_candidate(c: Candidate) -> dict:
+    raw = c.raw_result if isinstance(c.raw_result, dict) else {}
+    return build_profile_details(
+        summary=c.remarks,
+        growth_pattern=(raw.get("growth_pattern") if isinstance(raw, dict) else None),
+        applied_role=None,
+        payload=raw,
+        fallback_skills=c.skills,
+        fallback_education=c.education,
+        fallback_experience=c.experience_history,
+    )
+
+
 def _candidate_out_legacy(c: Candidate, job_title: str | None = None) -> CandidateOut:
     resume_url = refresh_resume_url(c.file_path, c.resume_url)
+    details = _profile_details_from_candidate(c)
     return CandidateOut(
         id=c.id,
         job_id=c.job_id,
@@ -59,10 +74,13 @@ def _candidate_out_legacy(c: Candidate, job_title: str | None = None) -> Candida
         weaknesses=c.weaknesses,
         breakdown=c.breakdown,
         score_details=None,
+        skills=details["skills"],
+        education=details["education"],
+        experience_history=details["experience_history"],
         remarks=c.remarks,
         summary=c.remarks,
         risk=c.risk,
-        growth_pattern=None,
+        growth_pattern=(c.raw_result or {}).get("growth_pattern") if isinstance(c.raw_result, dict) else None,
         interview_questions=None,
         ai_confidence=None,
         human_evaluation=c.human_evaluation,
@@ -71,6 +89,67 @@ def _candidate_out_legacy(c: Candidate, job_title: str | None = None) -> Candida
         screened_on=c.screened_on,
         created_at=c.created_at,
     )
+
+
+def _merge_stored_profile_details(db: Session, data: dict, client_id: str) -> dict:
+    """Prefer structured skills/education/experience saved on the local Candidate row."""
+    q = db.query(Candidate).filter(Candidate.client_id == client_id)
+    matched: Candidate | None = None
+    email = (data.get("email") or "").strip().lower()
+    name = (data.get("name") or "").strip().lower()
+
+    if email:
+        matched = (
+            q.filter(Candidate.email.ilike(email))
+            .order_by(Candidate.updated_at.desc())
+            .first()
+        )
+    if matched is None and name:
+        matched = (
+            q.filter(Candidate.name.ilike(name))
+            .order_by(Candidate.updated_at.desc())
+            .first()
+        )
+
+    if matched is None:
+        return data
+
+    details = _profile_details_from_candidate(matched)
+    # Prefer non-empty stored structured fields over summary-only fallbacks when present
+    if matched.skills:
+        data["skills"] = matched.skills
+    elif details["skills"]:
+        data["skills"] = details["skills"]
+    if matched.education:
+        data["education"] = matched.education
+    elif details["education"]:
+        data["education"] = details["education"]
+    if matched.experience_history:
+        data["experience_history"] = matched.experience_history
+    elif details["experience_history"]:
+        data["experience_history"] = details["experience_history"]
+    return data
+
+
+def _apply_details_to_candidate(candidate: Candidate, payload: dict | None, profile: ScreenedProfile | None = None) -> None:
+    details = build_profile_details(
+        summary=(profile.summary if profile else None) or candidate.remarks,
+        growth_pattern=profile.growth_pattern if profile else None,
+        applied_role=profile.applied_role if profile else None,
+        payload=payload,
+        fallback_skills=candidate.skills,
+        fallback_education=candidate.education,
+        fallback_experience=candidate.experience_history,
+    )
+    if details["skills"]:
+        candidate.skills = details["skills"]
+    if details["education"]:
+        candidate.education = details["education"]
+    if details["experience_history"]:
+        candidate.experience_history = details["experience_history"]
+    if payload:
+        existing = candidate.raw_result if isinstance(candidate.raw_result, dict) else {}
+        candidate.raw_result = {**existing, **payload}
 
 
 def _enrich_screened_out(data: dict, row: ScreenedProfile) -> dict:
@@ -138,7 +217,13 @@ def _norm_person_name(value: str | None) -> str:
     return " ".join("".join(ch if ch.isalnum() else " " for ch in value.lower()).split())
 
 
-def _mark_candidate_screened(candidate: Candidate, *, ended_at: datetime, profile: ScreenedProfile | None = None) -> None:
+def _mark_candidate_screened(
+    candidate: Candidate,
+    *,
+    ended_at: datetime,
+    profile: ScreenedProfile | None = None,
+    payload: dict | None = None,
+) -> None:
     candidate.screening_status = "completed"
     candidate.screened_on = ended_at
     if profile is not None:
@@ -149,6 +234,7 @@ def _mark_candidate_screened(candidate: Candidate, *, ended_at: datetime, profil
         candidate.remarks = profile.summary or candidate.remarks
         if profile.my_recommendation:
             candidate.status = profile.my_recommendation
+    _apply_details_to_candidate(candidate, payload, profile)
 
 
 def _reconcile_screening_completions(db: Session, user: User) -> int:
@@ -598,6 +684,7 @@ def list_candidates(
         if job:
             data["job_id"] = job.id
             data["job"] = job.title
+        data = _merge_stored_profile_details(db, data, current_user.client_id)
         results.append(_candidate_out_from_dict(data))
 
     # Include pending upload placeholders not yet written to Screened profile
@@ -639,6 +726,7 @@ def get_candidate(
         if job:
             data["job_id"] = job.id
             data["job"] = job.title
+        data = _merge_stored_profile_details(db, data, current_user.client_id)
         return _candidate_out_from_dict(data)
 
     c = (
@@ -864,7 +952,9 @@ async def upload_resumes_for_screening(
                     if cid:
                         c = db.get(Candidate, cid)
                         if c and c.user_id == current_user.id:
-                            _mark_candidate_screened(c, ended_at=ai_ended_at, profile=profile)
+                            _mark_candidate_screened(
+                                c, ended_at=ai_ended_at, profile=profile, payload=item
+                            )
                             matched_ids.add(cid)
 
                 # If webhook succeeded but returned no per-file payload, still record AI wait time

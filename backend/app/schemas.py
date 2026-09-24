@@ -151,6 +151,9 @@ class CandidateOut(BaseModel):
     weaknesses: list[Any] | None = None
     breakdown: dict[str, Any] | None = None
     score_details: dict[str, Any] | None = None
+    skills: list[Any] | None = None
+    education: list[Any] | None = None
+    experience_history: list[Any] | None = None
     remarks: str | None = None
     summary: str | None = None
     risk: str | None = None
@@ -211,6 +214,11 @@ class ScreeningResultIn(BaseModel):
     weaknesses: list[Any] | None = None
     breakdown: dict[str, Any] | None = None
     raw_result: dict[str, Any] | None = None
+    skills: list[Any] | None = None
+    education: list[Any] | None = None
+    experience: list[Any] | None = None
+    experience_history: list[Any] | None = None
+    work_experience: list[Any] | None = None
     screening_status: str = "completed"
 
     model_config = {"populate_by_name": True, "extra": "allow"}

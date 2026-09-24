@@ -7,7 +7,12 @@ from app.database import get_db
 from app.deps import require_n8n_api_key
 from app.models import Candidate, Job, ScreenedProfile, User
 from app.schemas import CandidateOut, JobRequirementOut, ScreeningResultIn
-from app.screening_profiles import apply_screening_payload, parse_score_value, screened_to_candidate_dict
+from app.screening_profiles import (
+    apply_screening_payload,
+    build_profile_details,
+    parse_score_value,
+    screened_to_candidate_dict,
+)
 
 router = APIRouter(prefix="/api/internal", tags=["n8n Internal"])
 
@@ -107,6 +112,25 @@ def n8n_save_screening_result(payload: ScreeningResultIn, db: Session = Depends(
                 candidate.file_path = profile.file_path
             if candidate.resume_url is None and profile.resume_url:
                 candidate.resume_url = profile.resume_url
+
+            details = build_profile_details(
+                summary=profile.summary,
+                growth_pattern=profile.growth_pattern,
+                applied_role=profile.applied_role,
+                payload=data,
+                fallback_skills=candidate.skills,
+                fallback_education=candidate.education,
+                fallback_experience=candidate.experience_history,
+            )
+            if details["skills"]:
+                candidate.skills = details["skills"]
+            if details["education"]:
+                candidate.education = details["education"]
+            if details["experience_history"]:
+                candidate.experience_history = details["experience_history"]
+            existing_raw = candidate.raw_result if isinstance(candidate.raw_result, dict) else {}
+            candidate.raw_result = {**existing_raw, **data}
+
             db.commit()
             db.refresh(profile)
 
@@ -116,4 +140,14 @@ def n8n_save_screening_result(payload: ScreeningResultIn, db: Session = Depends(
         out["job"] = job.title
     if user and not out.get("client_id"):
         out["client_id"] = user.client_id
+    # Prefer structured details just saved on the candidate row
+    if payload.candidate_id:
+        candidate = db.query(Candidate).filter(Candidate.id == payload.candidate_id).first()
+        if candidate:
+            if candidate.skills:
+                out["skills"] = candidate.skills
+            if candidate.education:
+                out["education"] = candidate.education
+            if candidate.experience_history:
+                out["experience_history"] = candidate.experience_history
     return CandidateOut(**out)

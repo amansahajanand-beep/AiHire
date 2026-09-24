@@ -45,7 +45,7 @@ export default function CandidateDetails() {
   const error = entry?.error || '';
 
   useEffect(() => {
-    if (id) dispatch(fetchCandidateById({ id }));
+    if (id) dispatch(fetchCandidateById({ id, force: true }));
   }, [dispatch, id]);
 
   const handleAction = async (evaluation) => {

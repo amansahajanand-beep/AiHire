@@ -85,6 +85,315 @@ def extract_strengths_weaknesses(summary: str | None) -> tuple[list[str], list[s
     return strengths, weaknesses
 
 
+def _section_lines(summary: str, headings: list[str]) -> list[str]:
+    pattern = (
+        r"(?:\*\*|#+)\s*(?:"
+        + "|".join(re.escape(h) for h in headings)
+        + r")\s*(?:\*\*)?\s*\n(.*?)(?=(?:\*\*|#+)\s*[A-Za-z]|$)"
+    )
+    match = re.search(pattern, summary, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return []
+    return [
+        line.strip("•-* \t")
+        for line in match.group(1).splitlines()
+        if line.strip("•-* \t")
+    ]
+
+
+def normalize_skills(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        # JSON list string?
+        text = value.strip()
+        if text.startswith("["):
+            try:
+                parsed = json.loads(text)
+                return normalize_skills(parsed)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return [part.strip() for part in re.split(r"[,;\n|/]+", text) if part.strip()]
+    if isinstance(value, list):
+        out: list[str] = []
+        for item in value:
+            if item is None:
+                continue
+            if isinstance(item, dict):
+                name = item.get("name") or item.get("skill") or item.get("title")
+                if name:
+                    out.append(str(name).strip())
+            else:
+                text = str(item).strip()
+                if text:
+                    out.append(text)
+        return out
+    return []
+
+
+def normalize_education(value: Any) -> list[dict[str, str]]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            try:
+                return normalize_education(json.loads(text))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return [{"degree": text, "school": "", "year": ""}]
+    if not isinstance(value, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in value:
+        if item is None:
+            continue
+        if isinstance(item, str):
+            text = item.strip()
+            if text:
+                out.append({"degree": text, "school": "", "year": ""})
+            continue
+        if isinstance(item, dict):
+            degree = str(item.get("degree") or item.get("title") or item.get("name") or "").strip()
+            school = str(item.get("school") or item.get("institution") or item.get("university") or "").strip()
+            year = str(item.get("year") or item.get("duration") or item.get("dates") or "").strip()
+            if degree or school:
+                out.append({"degree": degree or "Education", "school": school, "year": year})
+    return out
+
+
+def normalize_experience(value: Any) -> list[dict[str, str]]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return []
+        if text.startswith("["):
+            try:
+                return normalize_experience(json.loads(text))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return [{"title": "Experience", "company": "", "duration": "", "description": text}]
+    if not isinstance(value, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in value:
+        if item is None:
+            continue
+        if isinstance(item, str):
+            text = item.strip()
+            if text:
+                out.append({"title": text, "company": "", "duration": "", "description": ""})
+            continue
+        if isinstance(item, dict):
+            title = str(item.get("title") or item.get("role") or item.get("position") or "").strip()
+            company = str(item.get("company") or item.get("organization") or item.get("employer") or "").strip()
+            duration = str(item.get("duration") or item.get("dates") or item.get("period") or "").strip()
+            description = str(item.get("description") or item.get("summary") or item.get("details") or "").strip()
+            if title or company or description:
+                out.append(
+                    {
+                        "title": title or "Role",
+                        "company": company,
+                        "duration": duration,
+                        "description": description,
+                    }
+                )
+    return out
+
+
+def extract_profile_sections(summary: str | None) -> dict[str, list]:
+    """Pull skills / education / experience lists from markdown-ish summary sections."""
+    if not summary:
+        return {"skills": [], "education": [], "experience_history": []}
+
+    skill_lines = _section_lines(summary, ["Skills", "Key Skills", "Technical Skills"])
+    education_lines = _section_lines(summary, ["Education", "Academic Background"])
+    experience_lines = _section_lines(
+        summary, ["Experience", "Work Experience", "Professional Experience", "Employment History"]
+    )
+
+    education: list[dict[str, str]] = []
+    for line in education_lines:
+        # "B.S. Computer Science — Stanford University (2017)" or "Degree, School, Year"
+        degree, school, year = line, "", ""
+        if "—" in line or " - " in line:
+            parts = re.split(r"\s+[—-]\s+", line, maxsplit=1)
+            degree = parts[0].strip()
+            rest = parts[1].strip() if len(parts) > 1 else ""
+            year_match = re.search(r"\(([^)]+)\)\s*$", rest)
+            if year_match:
+                year = year_match.group(1).strip()
+                school = rest[: year_match.start()].strip(" ,")
+            else:
+                school = rest
+        elif "," in line:
+            bits = [b.strip() for b in line.split(",")]
+            degree = bits[0] if bits else line
+            school = bits[1] if len(bits) > 1 else ""
+            year = bits[2] if len(bits) > 2 else ""
+        education.append({"degree": degree, "school": school, "year": year})
+
+    experience_history: list[dict[str, str]] = []
+    for line in experience_lines:
+        title, company, duration, description = line, "", "", ""
+        # "Senior Engineer at Acme (2021 - Present): built APIs"
+        at_match = re.match(
+            r"^(?P<title>.+?)\s+at\s+(?P<company>.+?)(?:\s*\((?P<duration>[^)]+)\))?(?:\s*[:\-–]\s*(?P<desc>.+))?$",
+            line,
+            flags=re.IGNORECASE,
+        )
+        if at_match:
+            title = at_match.group("title").strip()
+            company = at_match.group("company").strip()
+            duration = (at_match.group("duration") or "").strip()
+            description = (at_match.group("desc") or "").strip()
+        experience_history.append(
+            {"title": title, "company": company, "duration": duration, "description": description}
+        )
+
+    return {
+        "skills": skill_lines,
+        "education": education,
+        "experience_history": experience_history,
+    }
+
+
+def extract_structured_from_payload(payload: dict[str, Any] | None) -> dict[str, list]:
+    payload = payload or {}
+    skills = normalize_skills(
+        payload.get("skills")
+        or payload.get("Skills")
+        or payload.get("key_skills")
+        or payload.get("technical_skills")
+    )
+    education = normalize_education(
+        payload.get("education")
+        or payload.get("Education")
+        or payload.get("education_history")
+    )
+    experience_history = normalize_experience(
+        payload.get("experience_history")
+        or payload.get("experienceHistory")
+        or payload.get("experience")
+        or payload.get("work_experience")
+        or payload.get("Work Experience")
+        or payload.get("Experience")
+    )
+    return {
+        "skills": skills,
+        "education": education,
+        "experience_history": experience_history,
+    }
+
+
+def build_profile_details(
+    *,
+    summary: str | None = None,
+    growth_pattern: str | None = None,
+    applied_role: str | None = None,
+    payload: dict[str, Any] | None = None,
+    fallback_skills: list | None = None,
+    fallback_education: list | None = None,
+    fallback_experience: list | None = None,
+) -> dict[str, list]:
+    """Merge structured payload, summary sections, and stored fallbacks."""
+    from_payload = extract_structured_from_payload(payload)
+    from_summary = extract_profile_sections(summary)
+
+    skills = (
+        from_payload["skills"]
+        or normalize_skills(fallback_skills)
+        or from_summary["skills"]
+    )
+    education = (
+        from_payload["education"]
+        or normalize_education(fallback_education)
+        or from_summary["education"]
+    )
+    experience_history = (
+        from_payload["experience_history"]
+        or normalize_experience(fallback_experience)
+        or from_summary["experience_history"]
+    )
+
+    # Soft fallback: growth pattern / summary as a single experience entry
+    if not experience_history and (growth_pattern or summary):
+        experience_history = [
+            {
+                "title": applied_role or "Professional Background",
+                "company": "",
+                "duration": "",
+                "description": (growth_pattern or summary or "").strip(),
+            }
+        ]
+
+    if not skills:
+        skills = _infer_skills_from_text(growth_pattern, summary)
+
+    if not education:
+        education = _infer_education_from_text(summary, growth_pattern)
+
+    return {
+        "skills": skills,
+        "education": education,
+        "experience_history": experience_history,
+    }
+
+
+def _infer_skills_from_text(*texts: str | None) -> list[str]:
+    blob = " ".join(t for t in texts if t)
+    if not blob:
+        return []
+    found: list[str] = []
+    for match in re.finditer(
+        r"(?:experience in|focusing on|skills? in|acquisition in|background in|expertise in)\s+([^.]+)",
+        blob,
+        flags=re.IGNORECASE,
+    ):
+        chunk = match.group(1)
+        for part in re.split(r",| and ", chunk):
+            skill = part.strip(" .;:")
+            skill = re.sub(r"\b(the|a|an|required|mandatory)\b", "", skill, flags=re.I).strip()
+            if 3 < len(skill) < 48:
+                found.append(skill)
+    for match in re.finditer(
+        r"\b(Data Science|Software Development|Machine Learning|Artificial Intelligence|React|Python|TypeScript|Node\.?js|AWS|Kubernetes|GenAI|DevOps)\b",
+        blob,
+        flags=re.IGNORECASE,
+    ):
+        token = match.group(1).strip()
+        if token and token.lower() not in {s.lower() for s in found}:
+            found.append(token)
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in found:
+        key = item.lower()
+        if key not in seen:
+            seen.add(key)
+            out.append(item)
+    return out[:12]
+
+
+def _infer_education_from_text(*texts: str | None) -> list[dict[str, str]]:
+    blob = " ".join(t for t in texts if t)
+    if not blob:
+        return []
+    pattern = re.compile(
+        r"\b((?:B\.?\s*S\.?|B\.?\s*Tech|B\.?\s*E\.?|M\.?\s*S\.?|M\.?\s*Tech|MBA|Ph\.?\s*D\.?|Bachelor(?:'s)?|Master(?:'s)?|Diploma)[^,.\n]{0,60})",
+        flags=re.IGNORECASE,
+    )
+    out: list[dict[str, str]] = []
+    for match in pattern.finditer(blob):
+        degree = match.group(1).strip(" ,;")
+        if degree:
+            out.append({"degree": degree, "school": "", "year": ""})
+    return out
+
+
 def parse_timestamp(value: Any) -> datetime | None:
     if value is None:
         return None
@@ -110,6 +419,12 @@ def screened_to_candidate_dict(row: ScreenedProfile, job_title: str | None = Non
     phone = row.mobile_number
     if phone and str(phone).upper() in {"#ERROR!", "N/A", "NA"}:
         phone = None
+
+    details = build_profile_details(
+        summary=row.summary,
+        growth_pattern=row.growth_pattern,
+        applied_role=job_title or row.applied_role,
+    )
 
     recommendation = row.my_recommendation or "Pending"
     return {
@@ -143,6 +458,9 @@ def screened_to_candidate_dict(row: ScreenedProfile, job_title: str | None = Non
             "education_score": row.education_score,
             "total_score": row.total_score,
         },
+        "skills": details["skills"],
+        "education": details["education"],
+        "experience_history": details["experience_history"],
         "remarks": row.summary,
         "summary": row.summary,
         "risk": row.risk_flag,

@@ -13,10 +13,13 @@ Base.metadata.create_all(bind=engine)
 
 
 def _ensure_candidate_storage_columns() -> None:
-    """Add resume storage columns to candidates if missing (Postgres)."""
+    """Add resume/profile columns to candidates if missing (Postgres)."""
     statements = [
         'ALTER TABLE candidates ADD COLUMN IF NOT EXISTS file_path TEXT',
         'ALTER TABLE candidates ADD COLUMN IF NOT EXISTS resume_url TEXT',
+        'ALTER TABLE candidates ADD COLUMN IF NOT EXISTS skills JSONB',
+        'ALTER TABLE candidates ADD COLUMN IF NOT EXISTS education JSONB',
+        'ALTER TABLE candidates ADD COLUMN IF NOT EXISTS experience_history JSONB',
     ]
     with engine.begin() as conn:
         for sql in statements:

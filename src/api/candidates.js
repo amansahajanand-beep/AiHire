@@ -85,9 +85,9 @@ function mapCandidate(c) {
     humanEvaluation: c.human_evaluation,
     humanNote: c.human_note,
     availability: c.availability,
-    skills: [],
-    education: [],
-    experienceHistory: [],
+    skills: c.skills || [],
+    education: c.education || [],
+    experienceHistory: c.experience_history || c.experienceHistory || [],
     raw: c,
   };
 }
