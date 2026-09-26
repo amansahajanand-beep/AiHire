@@ -1,19 +1,8 @@
-function trimTrailingSlash(url) {
-  return String(url || '').replace(/\/+$/, '');
-}
-
-// Vite proxy only exists in local `vite`/`vite preview` — never on Vercel static hosting.
-// Prefer an explicit API URL whenever it is set (Vercel env → baked in at build time).
-const explicitBase = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL);
-const useDevProxy =
-  import.meta.env.DEV &&
-  !explicitBase &&
-  import.meta.env.VITE_USE_PROXY !== 'false';
+const useProxy = import.meta.env.VITE_USE_PROXY !== 'false';
 
 export const apiConfig = {
-  baseUrl: useDevProxy
-    ? ''
-    : explicitBase || 'https://ai-hire-one.vercel.app',
+  // When proxy is on, browser calls same-origin /api → Vite → FastAPI
+  baseUrl: useProxy ? '' : (import.meta.env.VITE_API_BASE_URL || 'https://ai-hire-one.vercel.app'),
 };
 
 export function getToken() {
