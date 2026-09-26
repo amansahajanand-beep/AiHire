@@ -1,9 +1,11 @@
 from contextlib import asynccontextmanager
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
 from app.database import Base, get_engine
@@ -59,6 +61,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(_request: Request, exc: SQLAlchemyError):
+    logger.exception("Database error: %s", exc)
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "Database unavailable. Check DATABASE_URL on Vercel "
+            "(must be postgresql://... from Supabase, not an https:// URL).",
+            "error": str(exc.__class__.__name__),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(_request: Request, exc: Exception):
+    logger.exception("Unhandled error: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error", "error": str(exc)[:400]},
+    )
+
 
 app.include_router(auth.router)
 app.include_router(jobs.router)
