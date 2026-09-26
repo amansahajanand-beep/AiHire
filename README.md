@@ -20,7 +20,8 @@ Login/Register (FastAPI)
 ```bash
 cd backend
 .\.venv\Scripts\activate
-uvicorn app.main:app --reload --port 8000
+uvicorn main:app --reload --port 8000
+# or: uvicorn app.server:app --reload --port 8000
 ```
 
 ## Run frontend

@@ -42,7 +42,8 @@ python -m venv .venv
 
 pip install -r requirements.txt
 copy .env.example .env   # or cp .env.example .env
-uvicorn app.main:app --reload --port 8000
+uvicorn main:app --reload --port 8000
+# or: uvicorn app.server:app --reload --port 8000
 ```
 
 API docs: https://ai-hire-one.vercel.app/docs

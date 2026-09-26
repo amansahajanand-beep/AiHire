@@ -76,15 +76,6 @@ async def sqlalchemy_exception_handler(_request: Request, exc: SQLAlchemyError):
     )
 
 
-@app.exception_handler(Exception)
-async def unhandled_exception_handler(_request: Request, exc: Exception):
-    logger.exception("Unhandled error: %s", exc)
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal server error", "error": str(exc)[:400]},
-    )
-
-
 app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(screening.router)
