@@ -9,7 +9,10 @@ class Settings(BaseSettings):
     secret_key: str = "hireai-dev-secret"
     access_token_expire_minutes: int = 60 * 24
     database_url: str = "sqlite:///./hireai.db"
-    cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
+    cors_origins: str = (
+        "http://localhost:5173,http://127.0.0.1:5173,"
+        "https://ai-hire-theta.vercel.app,https://ai-hire-9or8.vercel.app"
+    )
     n8n_resume_webhook_url: str = "https://xbm.app.n8n.cloud/webhook/resume-upload"
     n8n_api_key: str = "hireai-n8n-internal-key"
     max_resume_uploads: int = 5
