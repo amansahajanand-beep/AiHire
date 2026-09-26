@@ -1,19 +1,24 @@
+/**
+ * API base URL resolution
+ *
+ * Production (Vercel frontend): use same-origin `/api/*`.
+ * vercel.json proxies those to the FastAPI backend, which avoids CORS.
+ *
+ * Local Vite: leave VITE_API_BASE_URL unset to use the Vite proxy, or set it
+ * to hit the backend directly.
+ */
 function trimTrailingSlash(url) {
   return String(url || '').replace(/\/+$/, '');
 }
 
-// Vite proxy only exists in local `vite`/`vite preview` — never on Vercel static hosting.
-// Prefer an explicit API URL whenever it is set (Vercel env → baked in at build time).
 const explicitBase = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL);
-const useDevProxy =
-  import.meta.env.DEV &&
-  !explicitBase &&
-  import.meta.env.VITE_USE_PROXY !== 'false';
+const useSameOriginProxy =
+  import.meta.env.PROD ||
+  (import.meta.env.DEV && !explicitBase && import.meta.env.VITE_USE_PROXY !== 'false');
 
 export const apiConfig = {
-  baseUrl: useDevProxy
-    ? ''
-    : explicitBase || 'https://ai-hire-one.vercel.app',
+  // Empty string => browser calls /api/... on the current host
+  baseUrl: useSameOriginProxy ? '' : explicitBase || 'https://ai-hire-one.vercel.app',
 };
 
 export function getToken() {
