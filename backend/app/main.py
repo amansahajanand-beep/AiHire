@@ -41,8 +41,6 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
-    # Preview deployments: https://ai-hire-9or8-git-....vercel.app
-    allow_origin_regex=r"https://ai-hire-9or8(-[\w-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
