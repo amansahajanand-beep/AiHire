@@ -29,8 +29,11 @@ def _normalize_database_url(url: str) -> str:
         raise ValueError(
             "DATABASE_URL must be a Postgres URI (postgresql://...), not an https:// URL"
         )
-    if raw.startswith("postgres://"):
-        raw = "postgresql://" + raw[len("postgres://") :]
+    # SQLAlchemy 2.1 defaults bare postgresql:// to psycopg (v3); only psycopg2 is installed.
+    for prefix in ("postgres://", "postgresql://"):
+        if raw.startswith(prefix):
+            raw = "postgresql+psycopg2://" + raw[len(prefix) :]
+            break
     if raw.startswith("sqlite:///./"):
         raw = "sqlite:////tmp/" + raw[len("sqlite:///./") :]
     return raw
