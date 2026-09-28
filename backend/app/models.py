@@ -123,3 +123,7 @@ class ScreenedProfile(Base):
     ai_confident: Mapped[str | None] = mapped_column("AI confident", Text, nullable=True)
     file_path: Mapped[str | None] = mapped_column("file_path", Text, nullable=True)
     resume_url: Mapped[str | None] = mapped_column("Resume URL", Text, nullable=True)
+    experience: Mapped[str | None] = mapped_column("Experience", Text, nullable=True)
+    education: Mapped[str | None] = mapped_column("Education", Text, nullable=True)
+    skill: Mapped[str | None] = mapped_column("Skill", Text, nullable=True)
+    strength: Mapped[str | None] = mapped_column("Strength", Text, nullable=True)

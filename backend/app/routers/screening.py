@@ -92,7 +92,9 @@ def _candidate_out_legacy(c: Candidate, job_title: str | None = None) -> Candida
 
 
 def _merge_stored_profile_details(db: Session, data: dict, client_id: str) -> dict:
-    """Prefer structured skills/education/experience saved on the local Candidate row."""
+    """Fill skills/education/experience missing from the screened row with the local Candidate's copy."""
+    if data.get("skills") and data.get("education") and data.get("experience_history"):
+        return data
     q = db.query(Candidate).filter(Candidate.client_id == client_id)
     matched: Candidate | None = None
     email = (data.get("email") or "").strip().lower()
@@ -115,19 +117,9 @@ def _merge_stored_profile_details(db: Session, data: dict, client_id: str) -> di
         return data
 
     details = _profile_details_from_candidate(matched)
-    # Prefer non-empty stored structured fields over summary-only fallbacks when present
-    if matched.skills:
-        data["skills"] = matched.skills
-    elif details["skills"]:
-        data["skills"] = details["skills"]
-    if matched.education:
-        data["education"] = matched.education
-    elif details["education"]:
-        data["education"] = details["education"]
-    if matched.experience_history:
-        data["experience_history"] = matched.experience_history
-    elif details["experience_history"]:
-        data["experience_history"] = details["experience_history"]
+    for key in ("skills", "education", "experience_history"):
+        if not data.get(key) and details[key]:
+            data[key] = details[key]
     return data
 
 

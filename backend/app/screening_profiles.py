@@ -101,19 +101,116 @@ def _section_lines(summary: str, headings: list[str]) -> list[str]:
     ]
 
 
+_PLACEHOLDERS = {"", "[object object]", "not available", "n/a", "na", "none", "null", "{}", "[]"}
+
+
+def _clean_text(value: Any) -> str:
+    return str(value).strip()
+
+
+def _is_placeholder(text: str) -> bool:
+    return text.strip().lower() in _PLACEHOLDERS
+
+
+def _text_lines(value: Any) -> list[str]:
+    lines = (line.strip("•-* \t") for line in _clean_text(value).splitlines())
+    return [line for line in lines if line and not _is_placeholder(line)]
+
+
+def _parse_pg_array(text: str) -> list[str] | None:
+    """Parse a Postgres array literal like '{"a","b"}' — what n8n writes when it saves a JS array into a text column."""
+    if not (text.startswith("{") and text.endswith("}")):
+        return None
+    try:
+        json.loads(text)
+        return None  # a plain JSON object, not an array literal
+    except (json.JSONDecodeError, TypeError):
+        pass
+    body = text[1:-1]
+    items: list[str] = []
+    i, n = 0, len(body)
+    while i < n:
+        if body[i] in ", ":
+            i += 1
+            continue
+        if body[i] == '"':
+            i += 1
+            buf: list[str] = []
+            while i < n and body[i] != '"':
+                if body[i] == "\\" and i + 1 < n:
+                    i += 1
+                buf.append(body[i])
+                i += 1
+            i += 1  # closing quote
+            items.append("".join(buf))
+        else:
+            end = body.find(",", i)
+            end = n if end == -1 else end
+            token = body[i:end].strip()
+            if token.upper() != "NULL":
+                items.append(token)
+            i = end
+    return items
+
+
+def _as_structured(text: str) -> list | None:
+    """Decode JSON lists and Postgres array literals; JSON-object items become dicts."""
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return parsed
+        except (json.JSONDecodeError, TypeError):
+            pass
+    items = _parse_pg_array(text)
+    if items is None:
+        return None
+    out: list = []
+    for item in items:
+        if item.startswith("{"):
+            try:
+                out.append(json.loads(item))
+                continue
+            except (json.JSONDecodeError, TypeError):
+                pass
+        out.append(item)
+    return out
+
+
+def parse_text_list(value: Any) -> list[str]:
+    """One item per line, a JSON list, or a Postgres array literal."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [t for t in (_clean_text(x) for x in value if x is not None) if not _is_placeholder(t)]
+    text = _clean_text(value)
+    structured = _as_structured(text)
+    if structured is not None:
+        return parse_text_list(structured)
+    return _text_lines(text)
+
+
+def split_risk_flag(value: Any) -> tuple[str | None, list[str]]:
+    """'Low\\nshort tenure\\n...' -> ('Low', ['short tenure', ...])."""
+    lines = parse_text_list(value)
+    if not lines:
+        return None, []
+    if lines[0].lower() in {"low", "medium", "high", "none"}:
+        return lines[0], lines[1:]
+    return None, lines
+
+
 def normalize_skills(value: Any) -> list[str]:
     if value is None:
         return []
     if isinstance(value, str):
-        # JSON list string?
-        text = value.strip()
-        if text.startswith("["):
-            try:
-                parsed = json.loads(text)
-                return normalize_skills(parsed)
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return [part.strip() for part in re.split(r"[,;\n|/]+", text) if part.strip()]
+        text = _clean_text(value)
+        structured = _as_structured(text)
+        if structured is not None:
+            return normalize_skills(structured)
+        # No "/" split: it would break skills like "CI/CD".
+        parts = (part.strip() for part in re.split(r"[,;\n|]+", text))
+        return [part for part in parts if part and not _is_placeholder(part)]
     if isinstance(value, list):
         out: list[str] = []
         for item in value:
@@ -131,19 +228,42 @@ def normalize_skills(value: Any) -> list[str]:
     return []
 
 
+_YEAR_TAIL = re.compile(
+    r",\s*((?:19|20)\d{2}(?:\s*[–-]\s*(?:(?:19|20)\d{2}|Present|Ongoing))?)\s*$",
+    flags=re.IGNORECASE,
+)
+
+
+def _parse_education_line(line: str) -> dict[str, str]:
+    """'Degree | School | Year', 'Degree, School, 2022' or 'Degree, School (2020-2023)'."""
+    if "|" in line:
+        parts = [p.strip() for p in line.split("|")]
+        return {
+            "degree": parts[0],
+            "school": parts[1] if len(parts) > 1 else "",
+            "year": " | ".join(parts[2:]),
+        }
+    rest, year = line, ""
+    paren = re.search(r"\(([^()]*)\)\s*$", rest)
+    tail = _YEAR_TAIL.search(rest)
+    if paren:
+        year, rest = paren.group(1).strip(), rest[: paren.start()].strip(" ,")
+    elif tail:
+        year, rest = tail.group(1).strip(), rest[: tail.start()].strip(" ,")
+    degree, _, school = rest.partition(",")
+    return {"degree": degree.strip(), "school": school.strip(), "year": year}
+
+
 def normalize_education(value: Any) -> list[dict[str, str]]:
     if value is None:
         return []
     if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return []
-        if text.startswith("["):
-            try:
-                return normalize_education(json.loads(text))
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return [{"degree": text, "school": "", "year": ""}]
+        text = _clean_text(value)
+        structured = _as_structured(text)
+        if structured is not None:
+            return normalize_education(structured)
+        entries = (e.strip() for e in re.split(r"[;\n]+", text))
+        return [_parse_education_line(e) for e in entries if e and not _is_placeholder(e)]
     if not isinstance(value, list):
         return []
     out: list[dict[str, str]] = []
@@ -152,8 +272,8 @@ def normalize_education(value: Any) -> list[dict[str, str]]:
             continue
         if isinstance(item, str):
             text = item.strip()
-            if text:
-                out.append({"degree": text, "school": "", "year": ""})
+            if text and not _is_placeholder(text):
+                out.append(_parse_education_line(text))
             continue
         if isinstance(item, dict):
             degree = str(item.get("degree") or item.get("title") or item.get("name") or "").strip()
@@ -168,15 +288,26 @@ def normalize_experience(value: Any) -> list[dict[str, str]]:
     if value is None:
         return []
     if isinstance(value, str):
-        text = value.strip()
-        if not text:
-            return []
-        if text.startswith("["):
-            try:
-                return normalize_experience(json.loads(text))
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return [{"title": "Experience", "company": "", "duration": "", "description": text}]
+        text = _clean_text(value)
+        structured = _as_structured(text)
+        if structured is not None:
+            return normalize_experience(structured)
+        # One job per line: "Company | Title | Duration | Description"
+        out: list[dict[str, str]] = []
+        for line in _text_lines(text):
+            parts = [p.strip() for p in line.split("|")]
+            if len(parts) >= 2:
+                out.append(
+                    {
+                        "company": parts[0],
+                        "title": parts[1],
+                        "duration": parts[2] if len(parts) > 2 else "",
+                        "description": " | ".join(parts[3:]),
+                    }
+                )
+            else:
+                out.append({"title": "Experience", "company": "", "duration": "", "description": line})
+        return out
     if not isinstance(value, list):
         return []
     out: list[dict[str, str]] = []
@@ -189,7 +320,9 @@ def normalize_experience(value: Any) -> list[dict[str, str]]:
                 out.append({"title": text, "company": "", "duration": "", "description": ""})
             continue
         if isinstance(item, dict):
-            title = str(item.get("title") or item.get("role") or item.get("position") or "").strip()
+            title = str(
+                item.get("title") or item.get("designation") or item.get("role") or item.get("position") or ""
+            ).strip()
             company = str(item.get("company") or item.get("organization") or item.get("employer") or "").strip()
             duration = str(item.get("duration") or item.get("dates") or item.get("period") or "").strip()
             description = str(item.get("description") or item.get("summary") or item.get("details") or "").strip()
@@ -321,13 +454,14 @@ def build_profile_details(
     )
 
     # Soft fallback: growth pattern / summary as a single experience entry
-    if not experience_history and (growth_pattern or summary):
+    fallback_text = (growth_pattern or summary or "").strip()
+    if not experience_history and fallback_text and not _is_placeholder(fallback_text):
         experience_history = [
             {
                 "title": applied_role or "Professional Background",
                 "company": "",
                 "duration": "",
-                "description": (growth_pattern or summary or "").strip(),
+                "description": fallback_text,
             }
         ]
 
@@ -382,9 +516,9 @@ def _infer_education_from_text(*texts: str | None) -> list[dict[str, str]]:
     blob = " ".join(t for t in texts if t)
     if not blob:
         return []
+    # Case-sensitive: with IGNORECASE, "be performed" matched as a B.E. degree.
     pattern = re.compile(
         r"\b((?:B\.?\s*S\.?|B\.?\s*Tech|B\.?\s*E\.?|M\.?\s*S\.?|M\.?\s*Tech|MBA|Ph\.?\s*D\.?|Bachelor(?:'s)?|Master(?:'s)?|Diploma)[^,.\n]{0,60})",
-        flags=re.IGNORECASE,
     )
     out: list[dict[str, str]] = []
     for match in pattern.finditer(blob):
@@ -414,7 +548,10 @@ def screened_to_candidate_dict(row: ScreenedProfile, job_title: str | None = Non
     skill = parse_score_value(row.skill_score)
     stability = parse_score_value(row.stability_score)
     education = parse_score_value(row.education_score)
-    strengths, weaknesses = extract_strengths_weaknesses(row.summary)
+    summary_strengths, summary_weaknesses = extract_strengths_weaknesses(row.summary)
+    risk_level, risk_points = split_risk_flag(row.risk_flag)
+    strengths = parse_text_list(row.strength) or summary_strengths
+    weaknesses = risk_points or summary_weaknesses
     screened_on = parse_timestamp(row.timestamp)
     phone = row.mobile_number
     if phone and str(phone).upper() in {"#ERROR!", "N/A", "NA"}:
@@ -424,6 +561,11 @@ def screened_to_candidate_dict(row: ScreenedProfile, job_title: str | None = Non
         summary=row.summary,
         growth_pattern=row.growth_pattern,
         applied_role=job_title or row.applied_role,
+        payload={
+            "skills": row.skill,
+            "education": row.education,
+            "experience": row.experience,
+        },
     )
 
     recommendation = row.my_recommendation or "Pending"
@@ -463,7 +605,7 @@ def screened_to_candidate_dict(row: ScreenedProfile, job_title: str | None = Non
         "experience_history": details["experience_history"],
         "remarks": row.summary,
         "summary": row.summary,
-        "risk": row.risk_flag,
+        "risk": risk_level or row.risk_flag,
         "growth_pattern": row.growth_pattern,
         "interview_questions": parse_interview_questions(row.interview_questions),
         "ai_confidence": row.ai_confident,
@@ -522,6 +664,12 @@ def apply_screening_payload(row: ScreenedProfile, payload: dict[str, Any]) -> Sc
     row.ai_confident = _as_text(pick("ai_confident", "AI confident", "ai_confidence", default=row.ai_confident))
     row.file_path = _as_text(pick("file_path", "resume_filename", default=row.file_path))
     row.resume_url = _as_text(pick("resume_url", "Resume URL", default=row.resume_url))
+    row.experience = _as_json_text(
+        pick("experience_history", "experience", "work_experience", "Experience", default=row.experience)
+    )
+    row.education = _as_json_text(pick("education", "Education", default=row.education))
+    row.skill = _as_json_text(pick("skills", "skill", "Skills", "Skill", default=row.skill))
+    row.strength = _as_json_text(pick("strengths", "strength", "Strengths", "Strength", default=row.strength))
 
     breakdown = pick("breakdown")
     if isinstance(breakdown, dict):
@@ -543,3 +691,9 @@ def _as_text(value: Any) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _as_json_text(value: Any) -> str | None:
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False)
+    return _as_text(value)
