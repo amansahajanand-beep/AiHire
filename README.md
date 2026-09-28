@@ -31,7 +31,7 @@ npm install
 npm run dev
 ```
 
-Frontend proxies `/api` → `https://ai-hire-one.vercel.app`.
+Frontend proxies `/api` → `https://ai-hire-chi.vercel.app//`.
 
 ## Test account
 

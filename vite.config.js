@@ -8,7 +8,7 @@ export default defineConfig({
     proxy: {
       // Proxy all /api/* calls to FastAPI dashboard backend
       '/api': {
-        target: 'https://ai-hire-one.vercel.app',
+        target: 'https://ai-hire-chi.vercel.app//',
         changeOrigin: true,
       },
     },

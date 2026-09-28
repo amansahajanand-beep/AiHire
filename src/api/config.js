@@ -2,7 +2,7 @@ const useProxy = import.meta.env.VITE_USE_PROXY !== 'false';
 
 export const apiConfig = {
   // When proxy is on, browser calls same-origin /api → Vite → FastAPI
-  baseUrl: useProxy ? '' : (import.meta.env.VITE_API_BASE_URL || 'https://ai-hire-one.vercel.app'),
+  baseUrl: useProxy ? '' : (import.meta.env.VITE_API_BASE_URL || 'https://ai-hire-chi.vercel.app//'),
 };
 
 export function getToken() {

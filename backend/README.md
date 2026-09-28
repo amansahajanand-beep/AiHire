@@ -46,7 +46,7 @@ uvicorn main:app --reload --port 8000
 # or: uvicorn app.server:app --reload --port 8000
 ```
 
-API docs: https://ai-hire-one.vercel.app/docs
+API docs: https://ai-hire-chi.vercel.app///docs
 
 ## Auth APIs (match frontend)
 
