@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
-import { createJobThunk, fetchJobs } from '../store/slices/jobsSlice';
+import { createJobThunk, fetchJobs, removeJobThunk, updateJobThunk } from '../store/slices/jobsSlice';
 import { invalidateHiringData } from '../store';
 
 export default function useJobs() {
@@ -23,6 +23,23 @@ export default function useJobs() {
     [dispatch]
   );
 
+  const updateJob = useCallback(
+    async (jobId, payload) => {
+      const job = await dispatch(updateJobThunk({ jobId, payload })).unwrap();
+      invalidateHiringData(dispatch);
+      return job;
+    },
+    [dispatch]
+  );
+
+  const removeJob = useCallback(
+    async (jobId) => {
+      await dispatch(removeJobThunk(jobId)).unwrap();
+      invalidateHiringData(dispatch);
+    },
+    [dispatch]
+  );
+
   useEffect(() => {
     dispatch(fetchJobs());
   }, [dispatch]);
@@ -34,6 +51,8 @@ export default function useJobs() {
     source: source || 'live',
     reload,
     addJob,
+    updateJob,
+    removeJob,
     fetchedAt,
   };
 }

@@ -1,14 +1,16 @@
 import { apiPostJson, apiGet } from './client';
 import { setAuthSession, clearAuthSession, getStoredUser } from './config';
 
-/** Register — matches frontend fields: name, email, password, confirmPassword */
-export async function register({ name, email, password, confirmPassword, company }) {
+/** Register — matches frontend fields: name, email, company, city, country, password, confirmPassword */
+export async function register({ name, email, password, confirmPassword, company, city, country }) {
   const data = await apiPostJson('/api/auth/register', {
     name,
     email,
     password,
     confirmPassword,
     company,
+    city,
+    country,
   });
   setAuthSession(data);
   return data;

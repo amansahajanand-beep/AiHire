@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import FilterDropdown from '../components/ui/FilterDropdown';
 import FileUploadZone from '../components/ui/FileUploadZone';
 import { uploadResumesForScreening } from '../api/resume';
@@ -12,7 +12,8 @@ export default function ResumeScreening() {
   const dispatch = useAppDispatch();
   const jobs = useAppSelector((s) => s.jobs.items);
   const jobsStatus = useAppSelector((s) => s.jobs.status);
-  const [selectedJob, setSelectedJob] = useState('');
+  const [searchParams] = useSearchParams();
+  const [selectedJob, setSelectedJob] = useState(searchParams.get('job') || '');
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState('');

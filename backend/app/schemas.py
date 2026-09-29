@@ -12,7 +12,9 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=6, max_length=128)
     confirmPassword: str | None = Field(default=None, alias="confirmPassword")
     confirm_password: str | None = None
-    company: str | None = None
+    company: str | None = Field(default=None, max_length=255)
+    city: str | None = Field(default=None, max_length=120)
+    country: str | None = Field(default=None, max_length=120)
 
     model_config = {"populate_by_name": True}
 
@@ -35,6 +37,8 @@ class UserOut(BaseModel):
     name: str
     email: EmailStr
     company: str | None = None
+    city: str | None = None
+    country: str | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

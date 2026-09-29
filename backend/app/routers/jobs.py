@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.auth import generate_job_code
 from app.database import get_db
 from app.deps import get_current_user
+from app.job_linking import is_real_profile, repair_profile_job_codes
 from app.models import Job, ScreenedProfile, User
 from app.schemas import JobCreate, JobOut, JobRequirementOut, JobUpdate
 from app.screening_profiles import parse_score_value
@@ -20,6 +21,7 @@ def _job_out(job: Job, db: Session) -> JobOut:
         )
         .all()
     )
+    rows = [r for r in rows if is_real_profile(r)]
     scores = [parse_score_value(r.total_score) for r in rows]
     scores = [s for s in scores if s is not None]
     avg = round(sum(scores) / len(scores), 1) if scores else 0.0
@@ -49,6 +51,7 @@ def list_jobs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    repair_profile_job_codes(db, current_user.client_id)
     q = db.query(Job).filter(Job.user_id == current_user.id)
     if status_filter and status_filter.lower() not in {"all", "all jobs"}:
         q = q.filter(Job.status == status_filter)

@@ -26,7 +26,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
         name=payload.name.strip(),
         email=payload.email.lower(),
         hashed_password=hash_password(payload.password),
-        company=payload.company,
+        company=(payload.company or "").strip() or None,
+        city=(payload.city or "").strip() or None,
+        country=(payload.country or "").strip() or None,
     )
     db.add(user)
     db.commit()

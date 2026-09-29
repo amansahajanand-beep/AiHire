@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Card from '../components/ui/Card';
 import SearchInput from '../components/ui/SearchInput';
@@ -11,7 +12,8 @@ import useCandidates from '../hooks/useCandidates';
 export default function Candidates() {
   const { candidates, jobOptions, statusOptions, loading, error, source } = useCandidates();
   const [search, setSearch] = useState('');
-  const [jobFilter, setJobFilter] = useState('All');
+  const [searchParams] = useSearchParams();
+  const [jobFilter, setJobFilter] = useState(searchParams.get('job') || 'All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortBy, setSortBy] = useState('score-desc');
   const [page, setPage] = useState(1);

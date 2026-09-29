@@ -1,5 +1,5 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-import { listJobs, createJob, deleteJob } from '../../api/jobs';
+import { listJobs, createJob, updateJob, deleteJob } from '../../api/jobs';
 import { shouldFetch } from '../cache';
 
 export const fetchJobs = createAsyncThunk(
@@ -21,6 +21,11 @@ export const fetchJobs = createAsyncThunk(
 export const createJobThunk = createAsyncThunk(
   'jobs/create',
   async (payload) => createJob(payload)
+);
+
+export const updateJobThunk = createAsyncThunk(
+  'jobs/update',
+  async ({ jobId, payload }) => updateJob(jobId, payload)
 );
 
 export const removeJobThunk = createAsyncThunk(
@@ -72,6 +77,12 @@ const jobsSlice = createSlice({
           state.items = [job, ...state.items.filter((j) => j.id !== job.id)];
         }
         state.fetchedAt = null;
+      })
+      .addCase(updateJobThunk.fulfilled, (state, action) => {
+        const job = action.payload;
+        if (job) {
+          state.items = state.items.map((j) => (j.id === job.id ? job : j));
+        }
       })
       .addCase(removeJobThunk.fulfilled, (state, action) => {
         state.items = state.items.filter((j) => j.id !== action.payload);

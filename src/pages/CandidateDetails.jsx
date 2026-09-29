@@ -17,7 +17,6 @@ import { invalidateActivity } from '../store/slices/activitySlice';
 const tabs = [
   { id: 'overview', label: 'Overview' },
   { id: 'resume', label: 'Resume' },
-  { id: 'ai-analysis', label: 'AI Analysis' },
   { id: 'experience', label: 'Experience' },
   { id: 'education', label: 'Education' },
   { id: 'skills', label: 'Skills' },
@@ -36,7 +35,7 @@ export default function CandidateDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const [activeTab, setActiveTab] = useState('ai-analysis');
+  const [activeTab, setActiveTab] = useState('overview');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const entry = useAppSelector((s) => s.candidates.byId[id]);
@@ -89,7 +88,7 @@ export default function CandidateDetails() {
         : ['No weak areas returned yet'];
   const screenedOn = candidate.screenedOn ? formatDate(candidate.screenedOn) : '—';
   const screenedTime = candidate.screenedOn ? formatScreenedTime(candidate.screenedOn) : '';
-  const showAnalysis = activeTab === 'overview' || activeTab === 'ai-analysis';
+  const showAnalysis = activeTab === 'overview';
 
   return (
     <div className="space-y-5">

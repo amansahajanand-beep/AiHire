@@ -1,6 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, MoreHorizontal } from 'lucide-react';
+import {
+  Plus,
+  MoreHorizontal,
+  Users,
+  Upload,
+  Copy,
+  Send,
+  FileEdit,
+  XCircle,
+  Archive,
+  Trash2,
+} from 'lucide-react';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import LoadingState from '../components/ui/LoadingState';
@@ -9,12 +20,106 @@ import { getStatusColor, formatDate, getScoreColor } from '../utils/helpers';
 
 const tabs = ['All Jobs', 'Published', 'Draft', 'Closed', 'Archived'];
 
+const MENU_WIDTH = 208;
+
+const statusActions = [
+  { status: 'Published', label: 'Publish', icon: Send },
+  { status: 'Draft', label: 'Move to Draft', icon: FileEdit },
+  { status: 'Closed', label: 'Close Job', icon: XCircle },
+  { status: 'Archived', label: 'Archive', icon: Archive },
+];
+
+function MenuItem({ icon: Icon, label, onClick, danger, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-left disabled:opacity-50 ${
+        danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-50'
+      }`}
+    >
+      <Icon className="w-4 h-4 shrink-0" />
+      {label}
+    </button>
+  );
+}
+
 export default function Jobs() {
   const navigate = useNavigate();
-  const { jobs, loading, error, source } = useJobs();
+  const { jobs, loading, error, source, updateJob, removeJob } = useJobs();
   const [activeTab, setActiveTab] = useState('All Jobs');
+  const [menu, setMenu] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState(null);
 
   const displayJobs = activeTab === 'All Jobs' ? jobs : jobs.filter((j) => j.status === activeTab);
+  const menuJob = menu ? jobs.find((j) => j.id === menu.jobId) : null;
+
+  useEffect(() => {
+    if (!menu) return undefined;
+    const close = () => setMenu(null);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [menu]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const t = setTimeout(() => setNotice(null), 3500);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  const openMenu = (event, jobId) => {
+    if (menu?.jobId === jobId) {
+      setMenu(null);
+      return;
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    const estimatedHeight = 330;
+    const openUp = rect.bottom + estimatedHeight > window.innerHeight && rect.top > estimatedHeight;
+    setMenu({
+      jobId,
+      left: Math.max(8, rect.right - MENU_WIDTH),
+      top: openUp ? undefined : rect.bottom + 4,
+      bottom: openUp ? window.innerHeight - rect.top + 4 : undefined,
+    });
+  };
+
+  const runAction = async (fn, successMessage) => {
+    setBusy(true);
+    try {
+      await fn();
+      setNotice({ type: 'success', text: successMessage });
+    } catch (err) {
+      setNotice({ type: 'error', text: err?.message || 'Action failed' });
+    } finally {
+      setBusy(false);
+      setMenu(null);
+    }
+  };
+
+  const changeStatus = (job, status) =>
+    runAction(() => updateJob(job.id, { status }), `"${job.title}" moved to ${status}`);
+
+  const deleteJob = (job) => {
+    setMenu(null);
+    if (!window.confirm(`Delete "${job.title}"? This cannot be undone.`)) return;
+    runAction(() => removeJob(job.id), `"${job.title}" deleted`);
+  };
+
+  const copyJobCode = async (job) => {
+    setMenu(null);
+    try {
+      await navigator.clipboard.writeText(job.jobCode || job.id);
+      setNotice({ type: 'success', text: 'Job code copied' });
+    } catch {
+      setNotice({ type: 'error', text: 'Could not copy job code' });
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -93,7 +198,16 @@ export default function Jobs() {
                       </td>
                       <td className="py-3.5 px-4 text-sm text-slate-500">{job.createdOn ? formatDate(job.createdOn) : '—'}</td>
                       <td className="py-3.5 px-4 text-right">
-                        <button className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg">
+                        <button
+                          type="button"
+                          onClick={(e) => openMenu(e, job.id)}
+                          aria-label={`Actions for ${job.title}`}
+                          className={`p-1.5 rounded-lg ${
+                            menu?.jobId === job.id
+                              ? 'text-slate-700 bg-slate-100'
+                              : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                          }`}
+                        >
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
                       </td>
@@ -109,6 +223,54 @@ export default function Jobs() {
           <p className="text-sm text-slate-500">Showing 1 to {displayJobs.length} of {displayJobs.length} jobs.</p>
         </div>
       </Card>
+
+      {menu && menuJob && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setMenu(null)} />
+          <div
+            className="fixed z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5"
+            style={{ left: menu.left, top: menu.top, bottom: menu.bottom, width: MENU_WIDTH }}
+          >
+            <MenuItem
+              icon={Users}
+              label="View Candidates"
+              onClick={() => navigate(`/candidates?job=${menuJob.id}`)}
+            />
+            {(menuJob.status === 'Published' || menuJob.status === 'Draft') && (
+              <MenuItem
+                icon={Upload}
+                label="Upload Resumes"
+                onClick={() => navigate(`/resume-screening?job=${menuJob.id}`)}
+              />
+            )}
+            <MenuItem icon={Copy} label="Copy Job Code" onClick={() => copyJobCode(menuJob)} />
+            <div className="my-1.5 border-t border-slate-100" />
+            {statusActions
+              .filter((a) => a.status !== menuJob.status)
+              .map((a) => (
+                <MenuItem
+                  key={a.status}
+                  icon={a.icon}
+                  label={a.label}
+                  disabled={busy}
+                  onClick={() => changeStatus(menuJob, a.status)}
+                />
+              ))}
+            <div className="my-1.5 border-t border-slate-100" />
+            <MenuItem icon={Trash2} label="Delete Job" danger disabled={busy} onClick={() => deleteJob(menuJob)} />
+          </div>
+        </>
+      )}
+
+      {notice && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 px-4 py-3 rounded-lg shadow-lg text-sm font-medium ${
+            notice.type === 'error' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
     </div>
   );
 }

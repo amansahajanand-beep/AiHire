@@ -199,7 +199,7 @@ export default function CreateJob() {
                 <Sparkles className="w-4 h-4 text-indigo-600" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-indigo-900">AI screening tip</p>
+                <p className="text-sm font-semibold text-indigo-900">HireScop tip</p>
                 <p className="text-xs text-indigo-700/80 mt-1 leading-relaxed">
                   Clear skills, responsibilities, and qualifications help the AI match resumes more accurately.
                 </p>

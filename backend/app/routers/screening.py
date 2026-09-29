@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
+from app.job_linking import repair_profile_job_codes
 from app.models import Candidate, Job, ScreenedProfile, User
 from app.schemas import (
     CandidateOut,
@@ -649,6 +650,7 @@ def list_candidates(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    repair_profile_job_codes(db, current_user.client_id)
     job_code = _job_id_to_code(db, current_user.id, job_id)
     title_map = _job_code_title_map(db, current_user.client_id)
 
