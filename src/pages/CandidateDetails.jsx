@@ -77,12 +77,12 @@ export default function CandidateDetails() {
   const strengths = candidate.strengths?.length
     ? candidate.strengths
     : candidate.screeningStatus !== 'completed'
-      ? ['Screening in progress via n8n...']
+      ? ['Screening in progress...']
       : ['See AI Summary below'];
   const weaknesses = candidate.weaknesses?.length
     ? candidate.weaknesses
     : candidate.screeningStatus !== 'completed'
-      ? ['Waiting for n8n screening result']
+      ? ['Waiting for screening result']
       : candidate.risk
         ? [`Risk flag: ${candidate.risk}`]
         : ['No weak areas returned yet'];
@@ -259,7 +259,7 @@ export default function CandidateDetails() {
                 Open Resume URL
               </a>
             ) : (
-              <p className="text-sm text-slate-500">Resume screened via n8n. URL not available yet.</p>
+              <p className="text-sm text-slate-500">Resume URL not available yet.</p>
             )}
           </div>
         </Card>

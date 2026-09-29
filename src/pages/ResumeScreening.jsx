@@ -71,7 +71,7 @@ export default function ResumeScreening() {
     <div className="max-w-3xl mx-auto space-y-8">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">AI Resume Screening</h1>
-        <p className="text-slate-500 mt-1">Select a job, upload resumes, and send them to the live n8n screening workflow.</p>
+        <p className="text-slate-500 mt-1">Select a job, upload resumes, and send them for AI screening.</p>
       </div>
 
       <div>
@@ -96,7 +96,7 @@ export default function ResumeScreening() {
 
       {result && (
         <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-lg px-4 py-3">
-          Sent to n8n ({result.n8n_status}). Client: {result.client_id} · Job: {result.job_code}
+          Submitted to screening engine. Job: {result.job_code}
         </div>
       )}
 
@@ -106,11 +106,8 @@ export default function ResumeScreening() {
           disabled={uploading || !selectedJob || files.length === 0}
           className="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold transition-colors shadow-sm"
         >
-          {uploading ? 'Sending to n8n screening...' : 'Start AI Analysis'}
+          {uploading ? 'Submitting to screening engine...' : 'Start AI Analysis'}
         </button>
-        <p className="text-center text-xs text-slate-400 mt-3">
-          Live webhook: xbm.app.n8n.cloud/webhook/resume-upload · Job must be selected first.
-        </p>
       </div>
     </div>
   );
