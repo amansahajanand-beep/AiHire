@@ -16,6 +16,7 @@ const iconMap = {
 export default function StatCard({
   title,
   value,
+  caption,
   change,
   trend,
   icon,
@@ -57,10 +58,11 @@ export default function StatCard({
 
   return (
     <div className="dashboard-stat-card bg-white rounded-2xl border border-slate-200 shadow-sm p-5 min-h-[132px] hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-3">
+      <div className={`flex ${caption ? 'items-center min-h-[92px]' : 'items-start'} justify-between gap-3`}>
         <div className="stat-card-body min-w-0">
           <p className="stat-card-title text-sm text-slate-500 mb-2 truncate">{title}</p>
-          <p className="stat-card-value text-3xl font-bold text-slate-900 tracking-tight leading-none">{value}</p>
+          <p className={`stat-card-value ${caption ? 'text-4xl font-extrabold' : 'text-3xl font-bold'} text-slate-900 tracking-tight leading-none`}>{value}</p>
+          {caption ? <p className="text-sm font-semibold text-slate-500 mt-1">{caption}</p> : null}
           {change ? (
             <div className="stat-card-meta flex items-center gap-1 mt-3">
               {trend === 'up' ? (

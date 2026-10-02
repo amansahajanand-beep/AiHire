@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { Gauge, FileSearch, MessageSquare, Zap } from 'lucide-react';
 import Features from './Features';
 import HowItWorks from './HowItWorks';
+import FlowAnimation from '../components/public/FlowAnimation';
 
 const highlights = [
   { icon: Gauge, label: '100-Point Candidate Evaluation' },
@@ -160,7 +161,8 @@ export default function Landing() {
 
       <div className="mt-16 text-center">
         <p className="home-reveal text-xs font-semibold tracking-wider uppercase text-slate-400 mb-4">Simple flow</p>
-        <div className="flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-1.5 lg:flex-nowrap lg:gap-2">
+        <FlowAnimation steps={simpleFlow} />
+        <div className="flex flex-col items-center gap-2 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-1.5 lg:hidden">
           {simpleFlow.map((label, i) => (
             <div
               key={label}

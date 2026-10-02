@@ -86,8 +86,8 @@ export default function ResumeScreening() {
       </div>
 
       <div>
-        <h2 className="text-base font-bold text-indigo-600 mb-3">2. Upload Resumes (Max 5)</h2>
-        <FileUploadZone files={files} onFilesChange={setFiles} maxFiles={5} />
+        <h2 className="text-base font-bold text-indigo-600 mb-3">2. Upload Resumes (Max 10)</h2>
+        <FileUploadZone files={files} onFilesChange={setFiles} maxFiles={10} />
       </div>
 
       {error && (

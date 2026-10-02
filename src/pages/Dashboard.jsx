@@ -62,9 +62,9 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     if (!totals) {
       return [
-        { title: 'Jobs Added This Month', value: '—', icon: 'Briefcase' },
-        { title: 'Candidates Screened', value: '—', icon: 'FileText' },
-        { title: 'Awaiting Human Review', value: '—', icon: 'UserCheck' },
+        { title: 'Jobs Added This Month', value: '—', caption: 'This month', icon: 'Briefcase' },
+        { title: 'Candidates Screened', value: '—', caption: 'This month', icon: 'FileText' },
+        { title: 'Awaiting Human Review', value: '—', caption: 'Human review', icon: 'UserCheck' },
         { title: 'Average Match Score', value: '—', icon: 'Target' },
         getHiringTimeCard(),
       ];
@@ -73,18 +73,21 @@ export default function Dashboard() {
       {
         title: 'Jobs Added This Month',
         value: String(totals.jobsAdded ?? 0),
+        caption: 'This month',
         icon: 'Briefcase',
         subtitle: totals.jobsAdded ? 'From your job board' : 'No data this month',
       },
       {
         title: 'Candidates Screened',
         value: String(totals.candidatesScreened ?? 0),
+        caption: 'This month',
         icon: 'FileText',
         subtitle: totals.candidatesScreened ? 'AI screened resumes' : 'No data this month',
       },
       {
         title: 'Awaiting Human Review',
         value: String(totals.awaitingReview ?? 0),
+        caption: 'Human review',
         icon: 'UserCheck',
         subtitle: totals.awaitingReview ? 'Needs your decision' : 'No data this month',
       },

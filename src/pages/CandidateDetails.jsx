@@ -121,12 +121,8 @@ export default function CandidateDetails() {
                   </span>
                 ) : null}
               </span>
-              {candidate.location && (
-                <>
-                  <span className="hidden sm:inline text-slate-300">·</span>
-                  <span className="text-slate-600">{candidate.location}</span>
-                </>
-              )}
+              <span className="hidden sm:inline text-slate-300">·</span>
+              <span className="text-slate-600">{candidate.location || 'Ahmedabad'}</span>
               <span className="hidden sm:inline text-slate-300">·</span>
               <span className="text-indigo-600 font-medium">{candidate.status || candidate.screeningStatus}</span>
             </div>

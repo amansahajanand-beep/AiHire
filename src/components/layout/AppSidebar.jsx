@@ -105,7 +105,7 @@ export default function AppSidebar({ isOpen, onClose }) {
                 <div>
                   <p className="text-sm font-semibold text-indigo-900">AI screening ready</p>
                   <p className="text-xs text-indigo-600/80 mt-0.5 leading-relaxed">
-                    Select a job to start matching resumes.
+                    AI-generated results may be inaccurate. Please verify before making hiring decisions.
                   </p>
                 </div>
               </div>

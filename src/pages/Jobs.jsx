@@ -9,7 +9,9 @@ import {
   Send,
   FileEdit,
   XCircle,
-  Archive,
+  Eye,
+  Pencil,
+  PauseCircle,
   Trash2,
 } from 'lucide-react';
 import Card from '../components/ui/Card';
@@ -26,7 +28,7 @@ const statusActions = [
   { status: 'Published', label: 'Publish', icon: Send },
   { status: 'Draft', label: 'Move to Draft', icon: FileEdit },
   { status: 'Closed', label: 'Close Job', icon: XCircle },
-  { status: 'Archived', label: 'Archive', icon: Archive },
+  { status: 'On Hold', label: 'On Hold', icon: PauseCircle },
 ];
 
 function MenuItem({ icon: Icon, label, onClick, danger, disabled }) {
@@ -111,6 +113,16 @@ export default function Jobs() {
     runAction(() => removeJob(job.id), `"${job.title}" deleted`);
   };
 
+  const viewJob = (job) => {
+    setMenu(null);
+    setNotice({ type: 'error', text: `Job details page for "${job.title}" is not available yet` });
+  };
+
+  const editJob = (job) => {
+    setMenu(null);
+    setNotice({ type: 'error', text: `Editing "${job.title}" is not available yet` });
+  };
+
   const copyJobCode = async (job) => {
     setMenu(null);
     try {
@@ -169,6 +181,7 @@ export default function Jobs() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
+                  <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Job ID</th>
                   <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Job Title</th>
                   <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Location</th>
                   <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Candidates</th>
@@ -183,6 +196,7 @@ export default function Jobs() {
                   const scoreColors = job.avgScore > 0 ? getScoreColor(job.avgScore) : null;
                   return (
                     <tr key={job.id} className="hover:bg-slate-50/50">
+                      <td className="py-3.5 px-4 text-sm text-slate-600">{job.jobCode || '—'}</td>
                       <td className="py-3.5 px-4 text-sm font-semibold text-slate-900">{job.title}</td>
                       <td className="py-3.5 px-4 text-sm text-slate-600">{job.location || '—'}</td>
                       <td className="py-3.5 px-4 text-sm font-medium text-slate-700">{job.candidates}</td>
@@ -231,6 +245,8 @@ export default function Jobs() {
             className="fixed z-50 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5"
             style={{ left: menu.left, top: menu.top, bottom: menu.bottom, width: MENU_WIDTH }}
           >
+            <MenuItem icon={Eye} label="View Job" onClick={() => viewJob(menuJob)} />
+            <MenuItem icon={Pencil} label="Edit Job" onClick={() => editJob(menuJob)} />
             <MenuItem
               icon={Users}
               label="View Candidates"

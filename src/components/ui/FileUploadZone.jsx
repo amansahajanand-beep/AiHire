@@ -1,31 +1,63 @@
+import { useState } from 'react';
 import { Upload, FileText, CheckCircle2, X } from 'lucide-react';
 import { formatFileSize } from '../../utils/helpers';
 
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
+const MAX_TOTAL_SIZE = 20 * 1024 * 1024;
+
+const isPdf = (f) => f.name.toLowerCase().endsWith('.pdf') && (!f.type || f.type === 'application/pdf');
+
 /**
  * Keeps real File objects so they can be uploaded to FastAPI → n8n.
+ * Only valid PDFs are accepted: max `maxFiles` files, `maxFileSize` per file, `maxTotalSize` overall.
  */
-export default function FileUploadZone({ files, onFilesChange, maxFiles = 5 }) {
+export default function FileUploadZone({
+  files,
+  onFilesChange,
+  maxFiles = 10,
+  maxFileSize = MAX_FILE_SIZE,
+  maxTotalSize = MAX_TOTAL_SIZE,
+}) {
+  const [errors, setErrors] = useState([]);
+
   const handleDrop = (e) => {
     e.preventDefault();
-    const dropped = Array.from(e.dataTransfer.files).slice(0, maxFiles - files.length);
-    addFiles(dropped);
+    addFiles(Array.from(e.dataTransfer.files));
   };
 
   const handleSelect = (e) => {
-    const selected = Array.from(e.target.files).slice(0, maxFiles - files.length);
-    addFiles(selected);
+    addFiles(Array.from(e.target.files));
     e.target.value = '';
   };
 
   const addFiles = (newFiles) => {
-    const mapped = newFiles.map((f) => ({
-      id: `${f.name}-${f.size}-${f.lastModified}-${Math.random()}`,
-      name: f.name,
-      size: f.size,
-      file: f,
-      status: 'ready',
-    }));
-    onFilesChange([...files, ...mapped].slice(0, maxFiles));
+    const accepted = [];
+    const problems = [];
+    let totalSize = files.reduce((sum, f) => sum + f.size, 0);
+
+    newFiles.forEach((f) => {
+      if (!isPdf(f)) {
+        problems.push(`"${f.name}" is not a PDF. Only PDF files are allowed.`);
+      } else if (f.size > maxFileSize) {
+        problems.push(`"${f.name}" is ${formatFileSize(f.size)}. Each file must be ${formatFileSize(maxFileSize)} or smaller.`);
+      } else if (files.length + accepted.length >= maxFiles) {
+        problems.push(`"${f.name}" was not added. You can upload a maximum of ${maxFiles} files.`);
+      } else if (totalSize + f.size > maxTotalSize) {
+        problems.push(`"${f.name}" was not added. Total size cannot exceed ${formatFileSize(maxTotalSize)}.`);
+      } else {
+        totalSize += f.size;
+        accepted.push({
+          id: `${f.name}-${f.size}-${f.lastModified}-${Math.random()}`,
+          name: f.name,
+          size: f.size,
+          file: f,
+          status: 'ready',
+        });
+      }
+    });
+
+    setErrors(problems);
+    if (accepted.length > 0) onFilesChange([...files, ...accepted]);
   };
 
   const removeFile = (id) => {
@@ -42,7 +74,7 @@ export default function FileUploadZone({ files, onFilesChange, maxFiles = 5 }) {
         <input
           type="file"
           multiple
-          accept=".pdf,.doc,.docx"
+          accept=".pdf,application/pdf"
           onChange={handleSelect}
           className="hidden"
           id="file-upload"
@@ -53,13 +85,21 @@ export default function FileUploadZone({ files, onFilesChange, maxFiles = 5 }) {
             <Upload className="w-10 h-10 text-indigo-600" strokeWidth={1.5} />
           </div>
           <p className="text-base font-semibold text-indigo-600 mb-1">Drop resumes here or click to browse</p>
-          <p className="text-sm text-slate-400">PDF, DOCX files only</p>
+          <p className="text-sm text-slate-400">PDF only · max 10 files · 2 MB per file · 20 MB total</p>
         </label>
       </div>
 
       <p className="mt-4 text-sm text-slate-500">
         Uploaded: <span className="font-semibold text-slate-700">{files.length} / {maxFiles}</span>
       </p>
+
+      {errors.length > 0 && (
+        <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3 space-y-1">
+          {errors.map((msg) => (
+            <p key={msg}>{msg}</p>
+          ))}
+        </div>
+      )}
 
       {files.length > 0 && (
         <div className="mt-3 divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-white">
