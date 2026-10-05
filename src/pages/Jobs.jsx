@@ -4,8 +4,6 @@ import {
   Plus,
   MoreHorizontal,
   Users,
-  Upload,
-  Copy,
   Send,
   FileEdit,
   XCircle,
@@ -121,16 +119,6 @@ export default function Jobs() {
   const editJob = (job) => {
     setMenu(null);
     setNotice({ type: 'error', text: `Editing "${job.title}" is not available yet` });
-  };
-
-  const copyJobCode = async (job) => {
-    setMenu(null);
-    try {
-      await navigator.clipboard.writeText(job.jobCode || job.id);
-      setNotice({ type: 'success', text: 'Job code copied' });
-    } catch {
-      setNotice({ type: 'error', text: 'Could not copy job code' });
-    }
   };
 
   return (
@@ -252,14 +240,6 @@ export default function Jobs() {
               label="View Candidates"
               onClick={() => navigate(`/candidates?job=${menuJob.id}`)}
             />
-            {(menuJob.status === 'Published' || menuJob.status === 'Draft') && (
-              <MenuItem
-                icon={Upload}
-                label="Upload Resumes"
-                onClick={() => navigate(`/resume-screening?job=${menuJob.id}`)}
-              />
-            )}
-            <MenuItem icon={Copy} label="Copy Job Code" onClick={() => copyJobCode(menuJob)} />
             <div className="my-1.5 border-t border-slate-100" />
             {statusActions
               .filter((a) => a.status !== menuJob.status)

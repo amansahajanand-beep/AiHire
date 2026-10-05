@@ -17,11 +17,11 @@ const weightage = {
 };
 
 const palette = {
-  skills: '#168F91',
-  experience: '#4F8FE8',
-  education: '#D6A23A',
-  stability: '#9273D8',
-  overall: '#258653',
+  skills: '#F59E0B',
+  experience: '#3B82F6',
+  education: '#8B5CF6',
+  stability: '#EC4899',
+  overall: '#14B8A6',
 };
 
 function barStyle(key, value) {
