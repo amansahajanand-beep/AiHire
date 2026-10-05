@@ -1,8 +1,11 @@
 from collections import defaultdict
 from datetime import datetime, timedelta
 
+import re
+from urllib.parse import quote
+
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -518,12 +521,12 @@ def hiring_activity(
                     icon="FileText",
                 )
             )
-        elif status in {"closed", "archived"}:
+        elif status in {"closed", "archived", "on hold"}:
             activities.append(
                 HiringActivityItem(
                     id=f"job-closed-{job.id}",
                     type="rejected",
-                    title="Job closed",
+                    title="Job put on hold" if status == "on hold" else "Job closed",
                     description=f"{job.title} position {status}",
                     user=actor,
                     timestamp=(job.updated_at or job.created_at or datetime.utcnow()).isoformat(),
@@ -732,6 +735,61 @@ def get_candidate(
         raise HTTPException(status_code=404, detail="Candidate not found")
     job = db.get(Job, c.job_id)
     return _candidate_out_legacy(c, job.title if job else None)
+
+
+@router.get("/candidates/{candidate_id}/resume")
+def download_candidate_resume(
+    candidate_id: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Stream the candidate's stored resume file as an attachment (the bucket is private)."""
+    row = (
+        db.query(ScreenedProfile)
+        .filter(
+            ScreenedProfile.row_id == candidate_id,
+            ScreenedProfile.client_id == current_user.client_id,
+        )
+        .first()
+    )
+    if row:
+        name, file_path, stored_url = row.candidate_name, row.file_path, row.resume_url
+    else:
+        c = (
+            db.query(Candidate)
+            .filter(Candidate.id == candidate_id, Candidate.user_id == current_user.id)
+            .first()
+        )
+        if not c:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+        name, file_path, stored_url = c.name, c.file_path, c.resume_url
+
+    url = refresh_resume_url(file_path, stored_url)
+    if not url:
+        raise HTTPException(status_code=404, detail="No resume file is available for this candidate")
+
+    try:
+        with httpx.Client(timeout=60.0, follow_redirects=True) as client:
+            upstream = client.get(url)
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail="Could not fetch the resume file") from exc
+    if upstream.status_code == 404:
+        raise HTTPException(status_code=404, detail="Resume file was not found in storage")
+    if upstream.status_code >= 400 or not upstream.content:
+        raise HTTPException(status_code=502, detail="Could not fetch the resume file")
+
+    source_name = (file_path or "").split("/")[-1]
+    ext = source_name.rsplit(".", 1)[-1].lower() if "." in source_name else "pdf"
+    if ext not in {"pdf", "doc", "docx"}:
+        ext = "pdf"
+    base = re.sub(r"[^A-Za-z0-9 _.-]+", "", name or "").strip().replace(" ", "_") or "resume"
+    filename = f"{base}.{ext}"
+    media_type = upstream.headers.get("content-type", "application/pdf" if ext == "pdf" else "application/octet-stream")
+    return Response(
+        content=upstream.content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"},
+    )
 
 
 @router.patch("/candidates/{candidate_id}/workflow", response_model=CandidateOut)

@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { User, Building2, Users, Bell, Plug, CreditCard } from 'lucide-react';
 import Card from '../components/ui/Card';
 import { getStoredUser } from '../api/config';
+import { fetchMe } from '../api/auth';
 import { getInitials } from '../utils/helpers';
 
 const settingsNav = [
@@ -23,6 +24,11 @@ export default function Settings() {
   });
   const [companyName, setCompanyName] = useState(storedUser?.company || '');
   const [saved, setSaved] = useState(false);
+  const [account, setAccount] = useState(storedUser);
+
+  useEffect(() => {
+    fetchMe().then(setAccount).catch(() => {});
+  }, []);
 
   const handleSave = () => {
     setSaved(true);
@@ -181,6 +187,18 @@ export default function Settings() {
           {activeSection === 'billing' && (
             <Card>
               <h3 className="text-base font-bold text-slate-900 mb-4">Billing & Plan</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <p className="text-xs text-slate-500">Current Plan</p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">{account?.plan || '—'}</p>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                  <p className="text-xs text-slate-500">Status</p>
+                  <p className={`text-sm font-semibold mt-1 ${String(account?.plan_status).toLowerCase() === 'active' ? 'text-emerald-600' : 'text-slate-900'}`}>
+                    {account?.plan_status || '—'}
+                  </p>
+                </div>
+              </div>
               <div className="p-4 bg-gradient-to-r from-indigo-50 to-violet-50 rounded-xl border border-indigo-100 mb-4">
                 <div className="flex items-center justify-between">
                   <div>

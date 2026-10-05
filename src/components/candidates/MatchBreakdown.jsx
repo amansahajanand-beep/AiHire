@@ -16,21 +16,24 @@ const weightage = {
   overall: 100,
 };
 
+// Theme tokens from index.css: --color-primary-violet, --color-score-excellent, -moderate, -low.
+const purple = { bar: '#7C3AED', text: '#7C3AED' };
+const green = { bar: '#10B981', text: '#10B981' };
+
 const palette = {
-  skills: '#F59E0B',
-  experience: '#3B82F6',
-  education: '#8B5CF6',
-  stability: '#EC4899',
-  overall: '#14B8A6',
+  skills: purple,
+  experience: purple,
+  education: purple,
+  stability: purple,
+  overall: green,
 };
 
 function barStyle(key, value) {
   if (key === 'overall') {
-    if (value <= 40) return { bar: '#EF4444', text: '#DC2626' };
-    if (value <= 65) return { bar: '#F59E0B', text: '#B45309' };
+    if (value <= 40) return { bar: '#EF4444', text: '#EF4444' };
+    if (value <= 65) return { bar: '#F59E0B', text: '#F59E0B' };
   }
-  const color = palette[key] || palette.overall;
-  return { bar: color, text: color };
+  return palette[key] || green;
 }
 
 const categories = ['skills', 'experience', 'education', 'stability'];

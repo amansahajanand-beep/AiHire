@@ -92,3 +92,15 @@ export async function apiPostForm(path, formData) {
 // Keep old names used by earlier modules
 export const postJson = (url, body) => apiPostJson(url.replace(apiConfig.baseUrl, '') || url, body);
 export const postFormData = (url, formData) => apiPostForm(url.replace(apiConfig.baseUrl, '') || url, formData);
+
+/** GET a binary file with auth and return { blob, filename } (filename from Content-Disposition). */
+export async function apiDownload(path) {
+  const res = await fetch(`${apiConfig.baseUrl}${path}`, {
+    method: 'GET',
+    headers: authHeaders(),
+  });
+  if (!res.ok) return parseResponse(res);
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = /filename\*=UTF-8''([^;]+)/i.exec(disposition) || /filename="?([^";]+)"?/i.exec(disposition);
+  return { blob: await res.blob(), filename: match ? decodeURIComponent(match[1]) : '' };
+}

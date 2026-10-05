@@ -11,6 +11,7 @@ import LoadingState from '../components/ui/LoadingState';
 import { getInitials, formatDate } from '../utils/helpers';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { fetchCandidateById, patchCandidateWorkflow } from '../store/slices/candidatesSlice';
+import { downloadCandidateResume } from '../api/candidates';
 import { invalidateDashboard } from '../store/slices/dashboardSlice';
 import { invalidateActivity } from '../store/slices/activitySlice';
 
@@ -38,6 +39,8 @@ export default function CandidateDetails() {
   const [activeTab, setActiveTab] = useState('overview');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState('');
   const entry = useAppSelector((s) => s.candidates.byId[id]);
   const candidate = entry?.data || null;
   const loading = (!entry || entry.status === 'loading') && !candidate;
@@ -58,6 +61,27 @@ export default function CandidateDetails() {
       // error stored on slice; surface via entry
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    setActionsOpen(false);
+    setDownloadError('');
+    setDownloading(true);
+    try {
+      const { blob, filename } = await downloadCandidateResume(id);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename || candidate?.resumeFilename || 'resume.pdf';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDownloadError(err.message || 'Could not download the PDF');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -122,7 +146,7 @@ export default function CandidateDetails() {
                 ) : null}
               </span>
               <span className="hidden sm:inline text-slate-300">·</span>
-              <span className="text-slate-600">{candidate.location || 'Ahmedabad'}</span>
+              <span className="text-slate-600">{candidate.location || '—'}</span>
               <span className="hidden sm:inline text-slate-300">·</span>
               <span className="text-indigo-600 font-medium">{candidate.status || candidate.screeningStatus}</span>
             </div>
@@ -145,6 +169,10 @@ export default function CandidateDetails() {
                 <button onClick={() => handleAction('Shortlisted')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Shortlist</button>
                 <button onClick={() => handleAction('Human Review')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Move to Review</button>
                 <button onClick={() => handleAction('Rejected')} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Reject</button>
+                <div className="my-1 border-t border-slate-100" />
+                <button onClick={handleDownloadPdf} disabled={downloading} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  {downloading ? 'Downloading...' : 'Download PDF'}
+                </button>
               </div>
             </>
           )}
@@ -152,6 +180,7 @@ export default function CandidateDetails() {
       </div>
 
       {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</div>}
+      {downloadError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{downloadError}</div>}
 
       <div className="border-b border-slate-200 overflow-x-auto">
         <div className="flex min-w-max">

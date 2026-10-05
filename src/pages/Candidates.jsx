@@ -61,8 +61,25 @@ function markDuplicates(candidates) {
   return candidates.map((c) => (duplicates.has(c.id) ? { ...c, isDuplicate: true } : c));
 }
 
+// Flatten any value (string, number, array, nested object) into lowercase searchable text.
+function toText(value) {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  if (Array.isArray(value)) return value.map(toText).join(' ');
+  if (typeof value === 'object') return Object.values(value).map(toText).join(' ');
+  return '';
+}
+
+function searchText(c) {
+  return [
+    c.name, c.email, c.phone, c.job, c.jobCode, c.location, c.status, c.humanEvaluation,
+    c.skills, c.education, c.experienceHistory, c.strengths, c.weaknesses,
+    c.summary, c.remarks, c.risk, c.resumeFilename,
+  ].map(toText).join(' ').toLowerCase();
+}
+
 export default function Candidates() {
-  const { candidates: rawCandidates, jobOptions, statusOptions, loading, error, source } = useCandidates();
+  const { candidates: rawCandidates, jobOptions, statusOptions, loading, error } = useCandidates();
   const candidates = useMemo(() => markDuplicates(rawCandidates), [rawCandidates]);
   const [search, setSearch] = useState('');
   const [searchParams] = useSearchParams();
@@ -72,12 +89,15 @@ export default function Candidates() {
   const [page, setPage] = useState(1);
   const perPage = 7;
 
+  const searchIndex = useMemo(() => new Map(candidates.map((c) => [c.id, searchText(c)])), [candidates]);
+
   const filtered = useMemo(() => {
+    // Every space-separated keyword must appear somewhere in the candidate's data (case-insensitive, partial).
+    const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
     return candidates
       .filter((c) => {
-        const matchesSearch =
-          c.name.toLowerCase().includes(search.toLowerCase()) ||
-          c.job.toLowerCase().includes(search.toLowerCase());
+        const haystack = searchIndex.get(c.id) || '';
+        const matchesSearch = terms.every((term) => haystack.includes(term));
         const matchesJob = jobFilter === 'All' || c.jobId === jobFilter || c.job === jobFilter;
         const matchesStatus = statusFilter === 'All' || c.status === statusFilter || c.humanEvaluation === statusFilter;
         return matchesSearch && matchesJob && matchesStatus;
@@ -90,7 +110,7 @@ export default function Candidates() {
         if (sortBy === 'time') return compareScreened(a, b, 'time', 'day');
         return 0;
       });
-  }, [candidates, search, jobFilter, statusFilter, sortBy]);
+  }, [candidates, searchIndex, search, jobFilter, statusFilter, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
@@ -103,9 +123,6 @@ export default function Candidates() {
           <h1 className="text-2xl font-bold text-slate-900">Candidates</h1>
           <p className="text-slate-500 mt-1">View and manage all screened candidates.</p>
         </div>
-        <span className="text-[11px] font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-500 uppercase tracking-wide">
-          {source || 'live'}
-        </span>
       </div>
 
       <Card padding={false}>
@@ -114,7 +131,7 @@ export default function Candidates() {
             <SearchInput
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search candidates..."
+              placeholder="Search by keywords (skills, experience, name etc)"
               className="flex-1"
             />
             <div className="flex flex-wrap gap-3">

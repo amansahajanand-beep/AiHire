@@ -85,7 +85,7 @@ export default function Dashboard() {
         subtitle: totals.candidatesScreened ? 'AI screened resumes' : 'No data this month',
       },
       {
-        title: 'Awaiting Human Review',
+        title: 'Awaiting',
         value: String(totals.awaitingReview ?? 0),
         caption: 'Human review',
         icon: 'UserCheck',

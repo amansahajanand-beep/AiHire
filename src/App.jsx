@@ -12,6 +12,7 @@ import Candidates from './pages/Candidates';
 import CandidateDetails from './pages/CandidateDetails';
 import Jobs from './pages/Jobs';
 import CreateJob from './pages/CreateJob';
+import JobDetails from './pages/JobDetails';
 import ResumeScreening from './pages/ResumeScreening';
 import AIAnalysisProgress from './pages/AIAnalysisProgress';
 import AutomationSolutions from './pages/AutomationSolutions';
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/candidates/:id" element={<CandidateDetails />} />
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/jobs/create" element={<CreateJob />} />
+            <Route path="/jobs/:id" element={<JobDetails />} />
             <Route path="/resume-screening" element={<ResumeScreening />} />
             <Route path="/ai-analysis" element={<AIAnalysisProgress />} />
             <Route path="/automation" element={<AutomationSolutions />} />

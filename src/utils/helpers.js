@@ -17,6 +17,7 @@ export function getStatusColor(status) {
     Draft: 'bg-amber-50 text-amber-700 border-amber-200',
     Closed: 'bg-violet-50 text-violet-700 border-violet-200',
     Archived: 'bg-slate-100 text-slate-500 border-slate-200',
+    'On Hold': 'bg-slate-100 text-slate-500 border-slate-200',
   };
   return map[status] || 'bg-slate-50 text-slate-600 border-slate-200';
 }

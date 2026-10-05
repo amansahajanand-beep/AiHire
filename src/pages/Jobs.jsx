@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus,
   MoreHorizontal,
@@ -14,11 +14,12 @@ import {
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
 import LoadingState from '../components/ui/LoadingState';
 import useJobs from '../hooks/useJobs';
 import { getStatusColor, formatDate, getScoreColor } from '../utils/helpers';
 
-const tabs = ['All Jobs', 'Published', 'Draft', 'Closed', 'Archived'];
+const tabs = ['All Jobs', 'Published', 'Draft', 'Closed', 'On Hold'];
 
 const MENU_WIDTH = 208;
 
@@ -47,11 +48,15 @@ function MenuItem({ icon: Icon, label, onClick, danger, disabled }) {
 
 export default function Jobs() {
   const navigate = useNavigate();
-  const { jobs, loading, error, source, updateJob, removeJob } = useJobs();
+  const location = useLocation();
+  const { jobs, loading, error, updateJob, removeJob } = useJobs();
   const [activeTab, setActiveTab] = useState('All Jobs');
   const [menu, setMenu] = useState(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   const displayJobs = activeTab === 'All Jobs' ? jobs : jobs.filter((j) => j.status === activeTab);
   const menuJob = menu ? jobs.find((j) => j.id === menu.jobId) : null;
@@ -66,6 +71,12 @@ export default function Jobs() {
       window.removeEventListener('resize', close);
     };
   }, [menu]);
+
+  useEffect(() => {
+    if (!location.state?.notice) return;
+    setNotice({ type: 'success', text: location.state.notice });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location, navigate]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -107,18 +118,51 @@ export default function Jobs() {
 
   const deleteJob = (job) => {
     setMenu(null);
-    if (!window.confirm(`Delete "${job.title}"? This cannot be undone.`)) return;
-    runAction(() => removeJob(job.id), `"${job.title}" deleted`);
+    setDeleteError('');
+    setDeleteTarget(job);
   };
+
+  const closeDeleteDialog = () => {
+    if (deleting) return;
+    setDeleteTarget(null);
+    setDeleteError('');
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await removeJob(deleteTarget.id);
+      setNotice({ type: 'success', text: `"${deleteTarget.title}" deleted` });
+      setDeleteTarget(null);
+    } catch (err) {
+      setDeleteError(err?.message || 'Failed to delete job');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!deleteTarget) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape' && !deleting) {
+        setDeleteTarget(null);
+        setDeleteError('');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [deleteTarget, deleting]);
 
   const viewJob = (job) => {
     setMenu(null);
-    setNotice({ type: 'error', text: `Job details page for "${job.title}" is not available yet` });
+    navigate(`/jobs/${encodeURIComponent(job.id)}`);
   };
 
   const editJob = (job) => {
     setMenu(null);
-    setNotice({ type: 'error', text: `Editing "${job.title}" is not available yet` });
+    navigate(`/jobs/create?edit=${encodeURIComponent(job.id)}`);
   };
 
   return (
@@ -129,9 +173,6 @@ export default function Jobs() {
           <p className="text-slate-500 mt-1">Manage and view all your job postings.</p>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-[11px] font-medium px-2 py-1 rounded-full bg-slate-100 text-slate-500 uppercase tracking-wide">
-            {source || 'live'}
-          </span>
           <button
             onClick={() => navigate('/jobs/create')}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"
@@ -256,6 +297,39 @@ export default function Jobs() {
             <MenuItem icon={Trash2} label="Delete Job" danger disabled={busy} onClick={() => deleteJob(menuJob)} />
           </div>
         </>
+      )}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+          onClick={closeDeleteDialog}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-job-title"
+            className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="delete-job-title" className="text-base font-semibold text-slate-900">
+              Are you sure you want to delete this job?
+            </h2>
+            <p className="text-sm text-slate-500 mt-1.5 break-words">{deleteTarget.title}</p>
+            {deleteError && (
+              <div className="mt-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
+                {deleteError}
+              </div>
+            )}
+            <div className="mt-6 flex justify-end gap-3">
+              <Button variant="secondary" onClick={closeDeleteDialog} disabled={deleting}>
+                Cancel
+              </Button>
+              <Button variant="danger" onClick={confirmDelete} disabled={deleting}>
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {notice && (

@@ -54,7 +54,8 @@ function mapJob(job) {
     skills: job.skills,
     responsibilities: job.responsibilities,
     qualifications: job.qualifications,
-    status: job.status,
+    // Legacy "Archived" jobs are treated as "On Hold".
+    status: job.status === 'Archived' ? 'On Hold' : job.status,
     candidates: job.candidates || 0,
     avgScore: job.avgScore || 0,
     createdOn: job.created_at,

@@ -140,6 +140,11 @@ def update_job(
         raise HTTPException(status_code=404, detail="Job not found")
 
     data = payload.model_dump(exclude_unset=True)
+    if "title" in data:
+        title = (data["title"] or "").strip()
+        if len(title) < 2:
+            raise HTTPException(status_code=422, detail="Job title must be at least 2 characters")
+        data["title"] = title
     if "employmentType" in data:
         job.employment_type = data.pop("employmentType")
     for key, value in data.items():

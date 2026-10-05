@@ -39,6 +39,8 @@ class UserOut(BaseModel):
     company: str | None = None
     city: str | None = None
     country: str | None = None
+    plan: str = "Pro"
+    plan_status: str = "Active"
     created_at: datetime
 
     model_config = {"from_attributes": True}

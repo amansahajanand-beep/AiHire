@@ -1,15 +1,22 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Save, Send, Sparkles } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card, { CardHeader } from '../components/ui/Card';
 import { useAppDispatch } from '../store/hooks';
-import { createJobThunk } from '../store/slices/jobsSlice';
+import LoadingState from '../components/ui/LoadingState';
+import { getJob } from '../api/jobs';
+import { createJobThunk, updateJobThunk } from '../store/slices/jobsSlice';
 import { invalidateHiringData } from '../store';
 
 export default function CreateJob() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('edit');
+  const isEdit = Boolean(editId);
+  const [loadingJob, setLoadingJob] = useState(isEdit);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [form, setForm] = useState({
     title: '', department: '', location: '', type: 'Full-time',
     experience: '', description: '', skills: '', responsibilities: '', qualifications: '',
@@ -17,12 +24,71 @@ export default function CreateJob() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  useEffect(() => {
+    if (!editId) return undefined;
+    let cancelled = false;
+    setLoadingJob(true);
+    setLoadFailed(false);
+    setError('');
+    getJob(editId)
+      .then((job) => {
+        if (cancelled) return;
+        setForm({
+          title: job.title || '',
+          department: job.department || '',
+          location: job.location || '',
+          type: job.employmentType || 'Full-time',
+          experience: job.experience || '',
+          description: job.description || '',
+          skills: job.skills || '',
+          responsibilities: job.responsibilities || '',
+          qualifications: job.qualifications || '',
+        });
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setLoadFailed(true);
+        setError(err.message || 'Job not found');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingJob(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [editId]);
+
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const handleSave = async (action) => {
     setSaving(true);
     setError('');
     try {
+      if (isEdit) {
+        if (!form.title.trim()) {
+          setError('Job title is required.');
+          return;
+        }
+        await dispatch(
+          updateJobThunk({
+            jobId: editId,
+            payload: {
+              title: form.title.trim(),
+              department: form.department,
+              location: form.location,
+              employmentType: form.type,
+              experience: form.experience,
+              description: form.description,
+              skills: form.skills,
+              responsibilities: form.responsibilities,
+              qualifications: form.qualifications,
+            },
+          })
+        ).unwrap();
+        invalidateHiringData(dispatch);
+        navigate('/jobs', { state: { notice: 'Job updated successfully' } });
+        return;
+      }
       await dispatch(
         createJobThunk({
           title: form.title,
@@ -49,6 +115,8 @@ export default function CreateJob() {
   const inputClass = 'w-full px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
   const labelClass = 'block text-sm font-semibold text-slate-700 mb-1.5';
 
+  if (isEdit && loadingJob) return <LoadingState message="Loading job..." />;
+
   return (
     <div className="w-full space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -59,19 +127,29 @@ export default function CreateJob() {
           >
             <ArrowLeft className="w-4 h-4" /> Back to Jobs
           </button>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Create Job</h1>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">{isEdit ? 'Edit Job' : 'Create Job'}</h1>
           <p className="text-slate-500 mt-1">
-            Add a new job posting to start screening candidates.
+            {isEdit
+              ? 'Update this job posting.'
+              : 'Add a new job posting to start screening candidates.'}
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 lg:pt-8">
-          <Button variant="secondary" onClick={() => handleSave('draft')} disabled={saving}>
-            <Save className="w-4 h-4" /> Save as Draft
-          </Button>
-          <Button onClick={() => handleSave('publish')} disabled={saving}>
-            <Send className="w-4 h-4" /> {saving ? 'Publishing...' : 'Publish Job'}
-          </Button>
+          {isEdit ? (
+            <Button onClick={() => handleSave('update')} disabled={saving || loadFailed}>
+              <Save className="w-4 h-4" /> {saving ? 'Updating...' : 'Update Job'}
+            </Button>
+          ) : (
+            <>
+              <Button variant="secondary" onClick={() => handleSave('draft')} disabled={saving}>
+                <Save className="w-4 h-4" /> Save as Draft
+              </Button>
+              <Button onClick={() => handleSave('publish')} disabled={saving}>
+                <Send className="w-4 h-4" /> {saving ? 'Publishing...' : 'Publish Job'}
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
