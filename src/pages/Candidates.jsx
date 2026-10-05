@@ -9,13 +9,66 @@ import LoadingState from '../components/ui/LoadingState';
 import useCandidates from '../hooks/useCandidates';
 
 
+// Same values the table shows: the calendar date and the time of day of `screenedOn`. Missing/invalid sorts last.
+function screenedParts(value) {
+  const d = new Date(value);
+  if (!value || Number.isNaN(d.getTime())) return null;
+  return {
+    day: new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(),
+    time: d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds(),
+  };
+}
+
+function compareScreened(a, b, primary, secondary) {
+  const pa = screenedParts(a.screenedOn);
+  const pb = screenedParts(b.screenedOn);
+  if (!pa && !pb) return 0;
+  if (!pa) return 1;
+  if (!pb) return -1;
+  return pb[primary] - pa[primary] || pb[secondary] - pa[secondary];
+}
+
+// No content hash is stored, and every screening gets a new id and a new resume path/file name,
+// so the same candidate is recognised by email, then phone, then the original resume file name
+// (without the `<candidateId>_` upload prefix) — always within the same job.
+const UPLOAD_PREFIX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_/i;
+
+function resumeKey(c) {
+  const email = String(c.email || '').trim().toLowerCase();
+  const phone = String(c.phone || '').replace(/\D/g, '');
+  const file = String(c.resumeFilename || '').split('/').pop().replace(UPLOAD_PREFIX, '').trim().toLowerCase();
+  const identity = email ? `email:${email}` : phone.length >= 7 ? `phone:${phone}` : file ? `file:${file}` : null;
+  if (!identity) return null;
+  return `${c.jobCode || c.jobId || c.job || ''}|${identity}`;
+}
+
+// The earliest completed screening of a resume stays "Completed"; later completed ones are duplicates.
+function markDuplicates(candidates) {
+  const completed = candidates
+    .filter((c) => String(c.screeningStatus).toLowerCase() === 'completed' && resumeKey(c))
+    .sort((a, b) => {
+      const ta = new Date(a.screenedOn).getTime() || 0;
+      const tb = new Date(b.screenedOn).getTime() || 0;
+      return ta - tb || String(a.id).localeCompare(String(b.id));
+    });
+  const seen = new Set();
+  const duplicates = new Set();
+  completed.forEach((c) => {
+    const key = resumeKey(c);
+    if (seen.has(key)) duplicates.add(c.id);
+    else seen.add(key);
+  });
+  return candidates.map((c) => (duplicates.has(c.id) ? { ...c, isDuplicate: true } : c));
+}
+
 export default function Candidates() {
-  const { candidates, jobOptions, statusOptions, loading, error, source } = useCandidates();
+  const { candidates: rawCandidates, jobOptions, statusOptions, loading, error, source } = useCandidates();
+  const candidates = useMemo(() => markDuplicates(rawCandidates), [rawCandidates]);
   const [search, setSearch] = useState('');
   const [searchParams] = useSearchParams();
   const [jobFilter, setJobFilter] = useState(searchParams.get('job') || 'All');
   const [statusFilter, setStatusFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('score-desc');
+  const [sortBy, setSortBy] = useState('screened-on');
   const [page, setPage] = useState(1);
   const perPage = 7;
 
@@ -33,6 +86,8 @@ export default function Candidates() {
         if (sortBy === 'score-desc') return b.score - a.score;
         if (sortBy === 'score-asc') return a.score - b.score;
         if (sortBy === 'name') return a.name.localeCompare(b.name);
+        if (sortBy === 'screened-on') return compareScreened(a, b, 'day', 'time');
+        if (sortBy === 'time') return compareScreened(a, b, 'time', 'day');
         return 0;
       });
   }, [candidates, search, jobFilter, statusFilter, sortBy]);
@@ -71,6 +126,8 @@ export default function Candidates() {
                   { value: 'score-desc', label: 'Sort by: Match Score' },
                   { value: 'score-asc', label: 'Sort by: Score Asc' },
                   { value: 'name', label: 'Sort by: Name' },
+                  { value: 'screened-on', label: 'Sort by: Screened On' },
+                  { value: 'time', label: 'Sort by: Time' },
                 ]}
                 onChange={setSortBy}
               />

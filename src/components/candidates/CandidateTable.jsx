@@ -77,7 +77,7 @@ export default function CandidateTable({ candidates, showJob = true, showScreene
                   </td>
                 )}
                 <td className="align-middle py-3.5 px-4">
-                  <span className="text-sm text-slate-600">{formatScreeningStatus(candidate.screeningStatus)}</span>
+                  <span className="text-sm text-slate-600">{candidate.isDuplicate ? 'Duplicate' : formatScreeningStatus(candidate.screeningStatus)}</span>
                 </td>
                 <td className="align-middle py-3.5 px-4 text-right">
                   <button

@@ -33,11 +33,25 @@ function barStyle(key, value) {
   return { bar: color, text: color };
 }
 
+const categories = ['skills', 'experience', 'education', 'stability'];
+
+// Incoming category values are performance percentages (0-100); the UI shows them weighted
+// by the 100-point system: percent / 100 * weight. Overall is the sum of the weighted scores.
+function weightedEntries(breakdown) {
+  const present = categories.filter((k) => breakdown?.[k] != null);
+  if (present.length === 0) {
+    return breakdown?.overall != null ? [['overall', Number(breakdown.overall) || 0]] : [];
+  }
+  const entries = present.map((k) => {
+    const percent = Math.min(Math.max(Number(breakdown[k]) || 0, 0), 100);
+    return [k, Math.round((percent / 100) * weightage[k])];
+  });
+  const overall = entries.reduce((sum, [, score]) => sum + score, 0);
+  return [...entries, ['overall', overall]];
+}
+
 export default function MatchBreakdown({ breakdown }) {
-  const order = ['skills', 'experience', 'education', 'stability', 'overall'];
-  const entries = order
-    .filter((k) => breakdown?.[k] != null)
-    .map((k) => [k, Number(breakdown[k]) || 0]);
+  const entries = weightedEntries(breakdown);
 
   return (
     <div className="space-y-5">
@@ -50,11 +64,11 @@ export default function MatchBreakdown({ breakdown }) {
             <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700 ease-out"
-                style={{ width: `${Math.min(Math.max(value, 0), 100)}%`, backgroundColor: style.bar }}
+                style={{ width: `${Math.min(Math.max((value / max) * 100, 0), 100)}%`, backgroundColor: style.bar }}
               />
             </div>
             <span className="text-sm font-bold w-16 text-right tabular-nums" style={{ color: style.text }}>
-              {Math.round(value)} / {max}
+              {value} / {max}
             </span>
           </div>
         );
