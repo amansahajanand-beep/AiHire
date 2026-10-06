@@ -3,6 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.cache import invalidate_client
 from app.database import get_db
 from app.deps import require_n8n_api_key
 from app.models import Candidate, Job, ScreenedProfile, User
@@ -88,6 +89,7 @@ def n8n_save_screening_result(payload: ScreeningResultIn, db: Session = Depends(
 
     apply_screening_payload(profile, data)
     db.commit()
+    invalidate_client(client_id)
     db.refresh(profile)
 
     # Mark matching queued Candidate as completed when candidate_id provided
@@ -132,6 +134,7 @@ def n8n_save_screening_result(payload: ScreeningResultIn, db: Session = Depends(
             candidate.raw_result = {**existing_raw, **data}
 
             db.commit()
+            invalidate_client(client_id)
             db.refresh(profile)
 
     out = screened_to_candidate_dict(profile, job.title if job else None)

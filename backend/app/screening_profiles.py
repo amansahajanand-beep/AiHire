@@ -609,7 +609,7 @@ def screened_to_candidate_dict(row: ScreenedProfile, job_title: str | None = Non
         "growth_pattern": row.growth_pattern,
         "interview_questions": parse_interview_questions(row.interview_questions),
         "ai_confidence": row.ai_confident,
-        "human_evaluation": recommendation,
+        "human_evaluation": row.human_evaluation,
         "human_note": None,
         "availability": None,
         "screened_on": screened_on,

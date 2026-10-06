@@ -23,6 +23,7 @@ def _ensure_candidate_storage_columns() -> None:
         "ALTER TABLE candidates ADD COLUMN IF NOT EXISTS skills JSONB",
         "ALTER TABLE candidates ADD COLUMN IF NOT EXISTS education JSONB",
         "ALTER TABLE candidates ADD COLUMN IF NOT EXISTS experience_history JSONB",
+        'ALTER TABLE "Screened profile_Multitenent Profile screening" ADD COLUMN IF NOT EXISTS human_evaluation TEXT',
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(120)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR(120)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(60) NOT NULL DEFAULT 'Pro'",

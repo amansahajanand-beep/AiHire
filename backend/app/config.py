@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     supabase_url: str = "https://othkmsnxujuoqajrkrap.supabase.co"
     supabase_service_role_key: str = ""
     supabase_resume_bucket: str = "Resume"
+    # Redis (Upstash) cache. Empty REDIS_URL or CACHE_ENABLED=false turns caching off.
+    redis_url: str = ""
+    cache_enabled: bool = True
+    cache_ttl_dashboard: int = 45
+    cache_ttl_signed_url: int = 3600
+    redis_key_prefix: str = "aihire:"
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 

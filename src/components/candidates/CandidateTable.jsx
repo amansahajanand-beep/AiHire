@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { getInitials, getStatusColor, formatDate } from '../../utils/helpers';
+import { getInitials, getStatusColor, formatDate, humanReviewLabel } from '../../utils/helpers';
 import MatchScoreBadge from './MatchScoreBadge';
 import Badge from '../ui/Badge';
 
@@ -22,6 +22,24 @@ function formatScreeningStatus(status) {
   return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
+export const CANDIDATE_CSV_HEADERS = [
+  'Candidate', 'Applied For', 'Match Score', 'Recommendation', 'Human Review', 'Screened On', 'Time', 'Status',
+];
+
+/** The same values the table shows for one candidate, in column order (used for the CSV export). */
+export function candidateCsvRow(candidate) {
+  return [
+    candidate.name,
+    candidate.job,
+    candidate.score,
+    statusDisplay[candidate.status] || candidate.status,
+    humanReviewLabel(candidate.humanEvaluation),
+    formatDate(candidate.screenedOn),
+    formatTime(candidate.screenedOn),
+    candidate.isDuplicate ? 'Duplicate' : formatScreeningStatus(candidate.screeningStatus),
+  ];
+}
+
 export default function CandidateTable({ candidates, showJob = true, showScreenedOn = false }) {
   const navigate = useNavigate();
 
@@ -34,6 +52,7 @@ export default function CandidateTable({ candidates, showJob = true, showScreene
             {showJob && <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Applied For</th>}
             <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Match Score</th>
             <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Recommendation</th>
+            <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Human Review</th>
             {showScreenedOn && <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Screened On</th>}
             {showScreenedOn && <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Time</th>}
             <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Status</th>
@@ -65,6 +84,9 @@ export default function CandidateTable({ candidates, showJob = true, showScreene
                   <Badge className={getStatusColor(displayStatus === 'Review' ? 'Review' : candidate.status)}>
                     {displayStatus}
                   </Badge>
+                </td>
+                <td className="align-middle py-3.5 px-4">
+                  <span className="text-sm text-slate-600">{humanReviewLabel(candidate.humanEvaluation)}</span>
                 </td>
                 {showScreenedOn && (
                   <td className="align-middle py-3.5 px-4">

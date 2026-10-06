@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Respon
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.cache import cached_model, invalidate_client
 from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
@@ -166,6 +167,11 @@ def _job_id_to_code(db: Session, user_id: str, job_id: str | None) -> str | None
         return None
     job = db.query(Job).filter(Job.id == job_id, Job.user_id == user_id).first()
     return job.job_code if job else None
+
+
+def _effective_status(row: ScreenedProfile) -> str | None:
+    """A human decision, when present, takes precedence over the AI recommendation for stats."""
+    return row.human_evaluation or row.my_recommendation
 
 
 def _norm_status(value: str | None) -> str:
@@ -352,6 +358,12 @@ def dashboard_totals(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    return cached_model(
+        "totals", current_user.client_id, DashboardTotals, lambda: _dashboard_totals_uncached(db, current_user)
+    )
+
+
+def _dashboard_totals_uncached(db: Session, current_user: User) -> DashboardTotals:
     # Finish any uploads whose Screened profile rows arrived without updating Candidate
     _reconcile_screening_completions(db, current_user)
 
@@ -370,7 +382,7 @@ def dashboard_totals(
     awaiting = sum(
         1
         for r in screened_rows
-        if (r.my_recommendation or "").lower() in {"", "pending", "human review", "review"}
+        if (_effective_status(r) or "").lower() in {"", "pending", "human review", "review"}
     )
     # Include still-processing uploads
     awaiting += (
@@ -405,6 +417,16 @@ def screening_overview(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    return cached_model(
+        "overview",
+        current_user.client_id,
+        ScreeningOverviewResponse,
+        lambda: _screening_overview_uncached(db, current_user, weeks),
+        extra=f"w{weeks}",
+    )
+
+
+def _screening_overview_uncached(db: Session, current_user: User, weeks: int) -> ScreeningOverviewResponse:
     """Aggregate screened / shortlisted / hired counts by week for the chart."""
     now = datetime.utcnow()
     start = _week_bucket_start(now) - timedelta(weeks=weeks - 1)
@@ -427,9 +449,9 @@ def screening_overview(
         if key not in buckets:
             continue
         buckets[key]["screened"] += 1
-        if _is_hired(row.my_recommendation):
+        if _is_hired(_effective_status(row)):
             buckets[key]["hired"] += 1
-        elif _is_shortlisted(row.my_recommendation):
+        elif _is_shortlisted(_effective_status(row)):
             buckets[key]["shortlisted"] += 1
 
     points = [
@@ -449,6 +471,12 @@ def hiring_pipeline(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    return cached_model(
+        "pipeline", current_user.client_id, PipelineResponse, lambda: _hiring_pipeline_uncached(db, current_user)
+    )
+
+
+def _hiring_pipeline_uncached(db: Session, current_user: User) -> PipelineResponse:
     screened_rows = (
         db.query(ScreenedProfile)
         .filter(ScreenedProfile.client_id == current_user.client_id)
@@ -471,7 +499,7 @@ def hiring_pipeline(
     hired = 0
 
     for row in screened_rows:
-        status = row.my_recommendation
+        status = _effective_status(row)
         if _is_hired(status):
             hired += 1
         elif _is_shortlisted(status):
@@ -496,6 +524,18 @@ def hiring_activity(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    return cached_model(
+        "activity",
+        current_user.client_id,
+        HiringActivityResponse,
+        lambda: _hiring_activity_uncached(db, current_user, type_filter, limit),
+        extra=f"{type_filter or 'all'}:{limit}",
+    )
+
+
+def _hiring_activity_uncached(
+    db: Session, current_user: User, type_filter: str | None, limit: int
+) -> HiringActivityResponse:
     activities: list[HiringActivityItem] = []
     actor = current_user.name or "You"
     title_map = _job_code_title_map(db, current_user.client_id)
@@ -599,7 +639,7 @@ def hiring_activity(
             )
         )
 
-        status = row.my_recommendation or ""
+        status = _effective_status(row) or ""
         if _is_hired(status) or _is_shortlisted(status):
             activities.append(
                 HiringActivityItem(
@@ -812,7 +852,7 @@ def update_candidate_workflow(
     )
     if row:
         if eval_value is not None:
-            row.my_recommendation = eval_value
+            row.human_evaluation = eval_value
         # Live Screened profile table has no "Projected availability" column.
         if note_value is not None:
             existing = row.summary or ""
@@ -827,6 +867,7 @@ def update_candidate_workflow(
                 existing = existing.split(marker, 1)[0]
             row.summary = f"{existing.rstrip()}{marker}{payload.availability}".strip()
         db.commit()
+        invalidate_client(current_user.client_id)
         db.refresh(row)
         data = screened_to_candidate_dict(row)
         data = _enrich_screened_out(data, row)
@@ -857,6 +898,7 @@ def update_candidate_workflow(
         c.availability = payload.availability
 
     db.commit()
+    invalidate_client(current_user.client_id)
     db.refresh(c)
     job = db.get(Job, c.job_id)
     return _candidate_out_legacy(c, job.title if job else None)
@@ -942,6 +984,7 @@ async def upload_resumes_for_screening(
         )
 
     db.commit()
+    invalidate_client(current_user.client_id)
 
     n8n_status = "calling"
     n8n_response = None
@@ -1022,6 +1065,7 @@ async def upload_resumes_for_screening(
                             # Treat webhook round-trip as completed AI timing sample
                             c.screening_status = "completed"
                 db.commit()
+                invalidate_client(current_user.client_id)
 
             # Link any profiles n8n wrote directly into Supabase
             _reconcile_screening_completions(db, current_user)
@@ -1034,6 +1078,7 @@ async def upload_resumes_for_screening(
                 c.screening_status = "failed"
                 c.remarks = f"n8n webhook failed: {exc}"
         db.commit()
+        invalidate_client(current_user.client_id)
 
     return UploadResponse(
         message="Resumes stored in Resume bucket and sent for AI screening",

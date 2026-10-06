@@ -122,6 +122,7 @@ class ScreenedProfile(Base):
     growth_pattern: Mapped[str | None] = mapped_column("Growth Pattern", Text, nullable=True)
     risk_flag: Mapped[str | None] = mapped_column("Risk Flag", Text, nullable=True)
     my_recommendation: Mapped[str | None] = mapped_column("My Recommendation", Text, nullable=True)
+    human_evaluation: Mapped[str | None] = mapped_column("human_evaluation", Text, nullable=True)
     summary: Mapped[str | None] = mapped_column("Summary", Text, nullable=True)
     interview_questions: Mapped[str | None] = mapped_column("Interview Questions", Text, nullable=True)
     ai_confident: Mapped[str | None] = mapped_column("AI confident", Text, nullable=True)

@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import Card from '../components/ui/Card';
 import SearchInput from '../components/ui/SearchInput';
 import FilterDropdown from '../components/ui/FilterDropdown';
-import CandidateTable from '../components/candidates/CandidateTable';
+import CandidateTable, { CANDIDATE_CSV_HEADERS, candidateCsvRow } from '../components/candidates/CandidateTable';
+import { downloadCsv } from '../utils/csv';
 import LoadingState from '../components/ui/LoadingState';
 import useCandidates from '../hooks/useCandidates';
+import { getExperienceYears, matchesExperience, parseExperienceQuery } from '../utils/experience';
 
 
 // Same values the table shows: the calendar date and the time of day of `screenedOn`. Missing/invalid sorts last.
@@ -102,16 +104,23 @@ export default function Candidates() {
 
   const searchIndex = useMemo(() => new Map(candidates.map((c) => [c.id, searchText(c)])), [candidates]);
 
+  const experienceYears = useMemo(() => new Map(candidates.map((c) => [c.id, getExperienceYears(c)])), [candidates]);
+
   const filtered = useMemo(() => {
     // Every space-separated keyword must appear somewhere in the candidate's data (case-insensitive, partial).
-    const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
+    // "2 years" / "5+ years" / "2.5 years" filter on the candidate's actual experience; the rest are keywords.
+    const { constraints, rest } = parseExperienceQuery(search);
+    const terms = rest.toLowerCase().split(/\s+/).filter(Boolean);
     // Custom Date: inclusive of the whole From day and the whole To day, on the "Screened On" value.
     const from = dateFilter === 'custom' ? dayBound(fromDate, false) : null;
     const to = dateFilter === 'custom' ? dayBound(toDate, true) : null;
     return candidates
       .filter((c) => {
         const haystack = searchIndex.get(c.id) || '';
-        const matchesSearch = terms.every((term) => haystack.includes(term));
+        const years = experienceYears.get(c.id) ?? null;
+        const matchesSearch =
+          terms.every((term) => haystack.includes(term)) &&
+          constraints.every((constraint) => matchesExperience(years, constraint));
         const matchesJob = jobFilter === 'All' || c.jobId === jobFilter || c.job === jobFilter;
         const matchesStatus = statusFilter === 'All' || c.status === statusFilter || c.humanEvaluation === statusFilter;
         let matchesDate = true;
@@ -129,7 +138,7 @@ export default function Candidates() {
         if (sortBy === 'time') return compareScreened(a, b, 'time', 'day');
         return 0;
       });
-  }, [candidates, searchIndex, search, jobFilter, statusFilter, sortBy, dateFilter, fromDate, toDate]);
+  }, [candidates, searchIndex, experienceYears, search, jobFilter, statusFilter, sortBy, dateFilter, fromDate, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
@@ -142,6 +151,15 @@ export default function Candidates() {
           <h1 className="text-2xl font-bold text-slate-900">Candidates</h1>
           <p className="text-slate-500 mt-1">View and manage all screened candidates.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => downloadCsv([CANDIDATE_CSV_HEADERS, ...filtered.map(candidateCsvRow)], 'candidates.csv')}
+          disabled={filtered.length === 0}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm disabled:opacity-50 shrink-0"
+        >
+          <Download className="w-4 h-4 text-slate-400" />
+          Download CSV
+        </button>
       </div>
 
       <Card padding={false}>

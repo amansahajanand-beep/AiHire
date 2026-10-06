@@ -9,6 +9,7 @@ from typing import Any
 import httpx
 
 from app.config import get_settings
+from app.cache import signed_url_get, signed_url_set
 
 
 class StorageError(RuntimeError):
@@ -175,8 +176,12 @@ def refresh_resume_url(file_path: str | None, current_url: str | None = None) ->
                 return key
             # Try to re-sign from a broken public URL path if we can extract it
             continue
+        cached = signed_url_get(key)
+        if cached:
+            return cached
         signed = create_signed_url(key)
         if signed:
+            signed_url_set(key, signed)
             return signed
 
     # Keep an existing signed URL if we could not mint a new one

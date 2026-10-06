@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import generate_job_code
+from app.cache import invalidate_client
 from app.database import get_db
 from app.deps import get_current_user
 from app.job_linking import is_real_profile, repair_profile_job_codes
@@ -86,6 +87,7 @@ def create_job(
     )
     db.add(job)
     db.commit()
+    invalidate_client(current_user.client_id)
     db.refresh(job)
     return _job_out(job, db)
 
@@ -151,6 +153,7 @@ def update_job(
         setattr(job, key, value)
 
     db.commit()
+    invalidate_client(current_user.client_id)
     db.refresh(job)
     return _job_out(job, db)
 
@@ -166,4 +169,5 @@ def delete_job(
         raise HTTPException(status_code=404, detail="Job not found")
     db.delete(job)
     db.commit()
+    invalidate_client(current_user.client_id)
     return None

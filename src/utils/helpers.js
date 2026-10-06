@@ -51,3 +51,12 @@ export function getGreeting() {
   if (hour < 17) return 'Good afternoon';
   return 'Good evening';
 }
+
+// Human Review shows the human's action (Shortlist / Reject / Move to Review); no action is N/A.
+export function humanReviewLabel(value) {
+  const v = String(value || '').trim().toLowerCase();
+  if (v === 'shortlisted') return 'Shortlisted';
+  if (v === 'rejected') return 'Rejected';
+  if (v === 'human review') return 'Human Review';
+  return 'N/A';
+}

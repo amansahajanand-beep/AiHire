@@ -65,7 +65,7 @@ function mapCandidate(c) {
     jobCode: c.job_code,
     location: c.location || '',
     score: c.score ?? 0,
-    status: c.human_evaluation || c.status || 'Pending',
+    status: c.status || 'Pending',
     screeningStatus: c.screening_status,
     screenedOn: c.screened_on || c.created_at,
     resumeFilename: c.resume_filename,

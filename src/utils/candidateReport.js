@@ -1,198 +1,110 @@
-import { jsPDF } from 'jspdf';
-import { weightedEntries, weightage, labels } from '../components/candidates/MatchBreakdown';
-import { formatDate } from './helpers';
-
-const MARGIN = 48;
-const COLORS = {
-  ink: [15, 23, 42],
-  body: [71, 85, 105],
-  muted: [100, 116, 139],
-  line: [226, 232, 240],
-  accent: [79, 70, 229],
-  purple: [124, 58, 237],
-  green: [16, 185, 129],
-  amber: [245, 158, 11],
-  red: [239, 68, 68],
-};
-
-// The built-in PDF fonts only cover Latin-1, so swap common typographic characters.
+// Strip characters that are not valid in a file name.
 function clean(value) {
-  return String(value ?? '')
-    .replace(/[–—]/g, '-')
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
-    .replace(/[•·]/g, '-')
-    .replace(/…/g, '...')
-    .replace(/[^\x09\x0A\x0D\x20-\x7E -ÿ]/g, '');
+  return String(value ?? '').replace(/[^\x20-\x7E\u00A0-\uFFFF]/g, '');
 }
 
-function asText(value) {
-  if (value == null) return '';
-  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join(', ');
-  if (typeof value === 'object') return Object.values(value).map(asText).filter(Boolean).join(' - ');
-  return String(value);
+function fileBase(candidate) {
+  const safe = clean(candidate.name || 'candidate').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '');
+  return `${safe || 'candidate'}_report`;
 }
 
-function timeOf(dateStr) {
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return '';
-  return [d.getHours(), d.getMinutes(), d.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
+// ---- PDF: an export of the candidate detail page exactly as it is displayed -------------------
+
+const PDF_MARGIN = 24;
+const PAGE_BG = '#F8FAFC';
+const SCALE = 2;
+const PAD = 16 * SCALE;
+
+/**
+ * Captures what is currently rendered inside `element` as a canvas, plus the y positions (canvas pixels)
+ * where a page break would not cut through a card. Elements marked data-html2canvas-ignore are left out;
+ * `skip(el)` can exclude more (used to avoid repeating the page header for every tab).
+ */
+export async function captureCandidatePage(element, skip = () => false) {
+  if (!element) throw new Error('Nothing to export yet.');
+  const { default: html2canvas } = await import('html2canvas-pro');
+  const shot = await html2canvas(element, {
+    scale: SCALE,
+    backgroundColor: PAGE_BG,
+    useCORS: true,
+    logging: false,
+    windowWidth: Math.max(element.scrollWidth, 1024),
+    ignoreElements: (el) => skip(el),
+  });
+
+  // Pad the capture so rings and shadows that extend past the page edge (e.g. the avatar) are not clipped.
+  const canvas = document.createElement('canvas');
+  canvas.width = shot.width + PAD * 2;
+  canvas.height = shot.height + PAD * 2;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = PAGE_BG;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(shot, PAD, PAD);
+
+  const rootTop = element.getBoundingClientRect().top;
+  const breaks = [...element.querySelectorAll('.rounded-xl.border, .rounded-2xl.border, .rounded-lg.border')]
+    .filter((el) => !skip(el) && !el.closest('[data-html2canvas-ignore]'))
+    .map((el) => Math.round((el.getBoundingClientRect().bottom - rootTop) * SCALE) + PAD)
+    .filter((y) => y > 0 && y < canvas.height);
+  return { canvas, breaks };
 }
 
-function scoreColor(score) {
-  if (score >= 66) return COLORS.green;
-  if (score >= 41) return COLORS.amber;
-  return COLORS.red;
-}
+/** Stacks the captures top to bottom and writes them to a paginated A4 PDF. */
+export async function downloadCandidateReportPdf(captures, candidate) {
+  if (!captures?.length) throw new Error('Nothing to export yet.');
+  const { jsPDF } = await import('jspdf');
 
-/** Builds and downloads a PDF of the candidate detail/report from the already-loaded candidate data. */
-export function downloadCandidateReport(candidate) {
+  const width = Math.max(...captures.map((c) => c.canvas.width));
+  const height = captures.reduce((sum, c) => sum + c.canvas.height, 0);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = PAGE_BG;
+  ctx.fillRect(0, 0, width, height);
+  const breaks = [];
+  let offset = 0;
+  captures.forEach((c) => {
+    ctx.drawImage(c.canvas, 0, offset);
+    c.breaks.forEach((y) => breaks.push(y + offset));
+    offset += c.canvas.height;
+    if (offset < height) breaks.push(offset);
+  });
+  breaks.sort((x, y) => x - y);
+
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
-  const contentW = pageW - MARGIN * 2;
-  let y = MARGIN;
+  const imgW = pageW - PDF_MARGIN * 2;
+  const pxPerPt = width / imgW;
+  const pageHpx = Math.floor((pageH - PDF_MARGIN * 2 - 14) * pxPerPt);
 
-  const ensure = (h) => {
-    if (y + h > pageH - MARGIN) {
-      doc.addPage();
-      y = MARGIN;
+  const slices = [];
+  let start = 0;
+  while (start < height) {
+    let end = Math.min(start + pageHpx, height);
+    if (end < height) {
+      const safe = breaks.filter((y) => y > start + pageHpx * 0.35 && y <= end).pop();
+      if (safe) end = safe;
     }
-  };
-
-  const text = (value, { size = 10, bold = false, color = COLORS.body, indent = 0, gap = 4 } = {}) => {
-    doc.setFont('helvetica', bold ? 'bold' : 'normal');
-    doc.setFontSize(size);
-    doc.setTextColor(...color);
-    const lines = doc.splitTextToSize(clean(value), contentW - indent);
-    const lineH = size * 1.4;
-    lines.forEach((line) => {
-      ensure(lineH);
-      doc.text(line, MARGIN + indent, y + size);
-      y += lineH;
-    });
-    y += gap;
-  };
-
-  const heading = (title) => {
-    ensure(40);
-    y += 8;
-    doc.setDrawColor(...COLORS.line);
-    doc.line(MARGIN, y, pageW - MARGIN, y);
-    y += 10;
-    text(title, { size: 13, bold: true, color: COLORS.ink, gap: 6 });
-  };
-
-  const bullets = (items) => items.forEach((item) => text(`-  ${asText(item)}`, { indent: 6, gap: 3 }));
-
-  // Header
-  text(candidate.name || 'Candidate', { size: 20, bold: true, color: COLORS.ink, gap: 2 });
-  text(candidate.job || '-', { size: 11, color: COLORS.muted, gap: 8 });
-  const screenedOn = candidate.screenedOn ? formatDate(candidate.screenedOn) : '-';
-  const screenedTime = candidate.screenedOn ? timeOf(candidate.screenedOn) : '';
-  const facts = [
-    ['Applied for', candidate.job || '-'],
-    ['Screened on', screenedOn],
-    ['Time', screenedTime || '-'],
-    ['Location', candidate.location || '-'],
-    ['Status', candidate.status || candidate.screeningStatus || '-'],
-    ['Email', candidate.email || '-'],
-    ['Phone', candidate.phone || '-'],
-  ];
-  facts.forEach(([label, value]) => {
-    text(`${label}: ${value}`, { color: COLORS.body, gap: 1 });
-  });
-
-  // Match score
-  heading('AI Match Score');
-  const score = Math.round(Number(candidate.score) || 0);
-  text(`${score} / 100`, { size: 24, bold: true, color: scoreColor(score), gap: 2 });
-  text(candidate.status || candidate.humanEvaluation || 'Screened profile', { color: COLORS.muted });
-
-  // Match breakdown (same weighted calculation as the page)
-  heading('AI Match Breakdown');
-  const entries = weightedEntries(candidate.breakdown);
-  if (entries.length === 0) text('No breakdown available.', { color: COLORS.muted });
-  entries.forEach(([key, value]) => {
-    const max = weightage[key] ?? 100;
-    const barW = contentW - 170;
-    ensure(22);
-    const color = key === 'overall' ? scoreColor(value) : COLORS.purple;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(...color);
-    doc.text(clean(labels[key] || key), MARGIN, y + 10);
-    doc.setFillColor(...COLORS.line);
-    doc.roundedRect(MARGIN + 90, y + 2, barW, 8, 4, 4, 'F');
-    const filled = Math.max(0, Math.min(1, value / max)) * barW;
-    if (filled > 0) {
-      doc.setFillColor(...color);
-      doc.roundedRect(MARGIN + 90, y + 2, Math.max(filled, 8), 8, 4, 4, 'F');
-    }
-    doc.setFont('helvetica', 'bold');
-    doc.text(`${value} / ${max}`, pageW - MARGIN, y + 10, { align: 'right' });
-    y += 22;
-  });
-
-  // Strengths / weaknesses (same fallbacks as the page)
-  const done = candidate.screeningStatus === 'completed';
-  const strengths = candidate.strengths?.length
-    ? candidate.strengths
-    : done ? ['See AI Summary below'] : ['Screening in progress...'];
-  const weaknesses = candidate.weaknesses?.length
-    ? candidate.weaknesses
-    : !done
-      ? ['Waiting for screening result']
-      : candidate.risk ? [`Risk flag: ${candidate.risk}`] : ['No weak areas returned yet'];
-  heading('Strengths');
-  bullets(strengths);
-  heading('Missing / Weak Areas');
-  bullets(weaknesses);
-
-  if (candidate.summary || candidate.remarks || candidate.growthPattern) {
-    heading('AI Summary');
-    if (candidate.growthPattern) text(`Growth: ${candidate.growthPattern}`, { color: COLORS.accent });
-    text(candidate.summary || candidate.remarks || '');
+    slices.push([start, end]);
+    start = end;
   }
 
-  if ((candidate.interviewQuestions || []).length > 0) {
-    heading('Interview Questions');
-    candidate.interviewQuestions.forEach((q, i) => text(`${i + 1}. ${asText(q)}`, { indent: 6, gap: 3 }));
-  }
-
-  if ((candidate.skills || []).length > 0) {
-    heading('Skills');
-    text(asText(candidate.skills));
-  }
-
-  if ((candidate.experienceHistory || []).length > 0) {
-    heading('Work Experience');
-    candidate.experienceHistory.forEach((exp) => {
-      text(asText(exp.title), { bold: true, color: COLORS.ink, gap: 1 });
-      text([exp.company, exp.duration].map(asText).filter(Boolean).join('  |  '), { color: COLORS.muted, gap: 1 });
-      if (exp.description) text(asText(exp.description), { gap: 6 });
-    });
-  }
-
-  if ((candidate.education || []).length > 0) {
-    heading('Education');
-    candidate.education.forEach((edu) => {
-      text(asText(edu.degree), { bold: true, color: COLORS.ink, gap: 1 });
-      text([edu.school, edu.year].map(asText).filter(Boolean).join('  |  '), { color: COLORS.muted, gap: 6 });
-    });
-  }
-
-  // Footer with page numbers
-  const pages = doc.getNumberOfPages();
-  for (let p = 1; p <= pages; p += 1) {
-    doc.setPage(p);
+  slices.forEach(([top, bottom], index) => {
+    if (index > 0) doc.addPage();
+    doc.setFillColor(248, 250, 252);
+    doc.rect(0, 0, pageW, pageH, 'F');
+    const part = document.createElement('canvas');
+    part.width = width;
+    part.height = bottom - top;
+    part.getContext('2d').drawImage(canvas, 0, top, width, bottom - top, 0, 0, width, bottom - top);
+    doc.addImage(part.toDataURL('image/png'), 'PNG', PDF_MARGIN, PDF_MARGIN, imgW, (bottom - top) / pxPerPt, undefined, 'FAST');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.setTextColor(...COLORS.muted);
-    doc.text(`Candidate report - ${clean(candidate.name || '')}`, MARGIN, pageH - 24);
-    doc.text(`Page ${p} of ${pages}`, pageW - MARGIN, pageH - 24, { align: 'right' });
-  }
+    doc.setTextColor(107, 114, 128);
+    doc.text(`Page ${index + 1} of ${slices.length}`, pageW - PDF_MARGIN, pageH - 14, { align: 'right' });
+  });
 
-  const safeName = clean(candidate.name || 'candidate').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'candidate';
-  doc.save(`${safeName}_report.pdf`);
+  doc.save(`${fileBase(candidate)}.pdf`);
 }
