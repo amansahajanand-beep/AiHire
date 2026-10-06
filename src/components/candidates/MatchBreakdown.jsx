@@ -1,4 +1,4 @@
-const labels = {
+export const labels = {
   skills: 'Skills',
   experience: 'Experience',
   education: 'Education',
@@ -7,7 +7,7 @@ const labels = {
   overall: 'Overall',
 };
 
-const weightage = {
+export const weightage = {
   skills: 40,
   experience: 30,
   education: 15,
@@ -40,7 +40,7 @@ const categories = ['skills', 'experience', 'education', 'stability'];
 
 // Incoming category values are performance percentages (0-100); the UI shows them weighted
 // by the 100-point system: percent / 100 * weight. Overall is the sum of the weighted scores.
-function weightedEntries(breakdown) {
+export function weightedEntries(breakdown) {
   const present = categories.filter((k) => breakdown?.[k] != null);
   if (present.length === 0) {
     return breakdown?.overall != null ? [['overall', Number(breakdown.overall) || 0]] : [];

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  ChevronLeft, ChevronDown, CheckCircle2, Diamond,
+  ChevronLeft, ChevronDown, Download, CheckCircle2, Diamond,
   FileText, GraduationCap,
 } from 'lucide-react';
 import Card from '../components/ui/Card';
@@ -11,7 +11,7 @@ import LoadingState from '../components/ui/LoadingState';
 import { getInitials, formatDate } from '../utils/helpers';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { fetchCandidateById, patchCandidateWorkflow } from '../store/slices/candidatesSlice';
-import { downloadCandidateResume } from '../api/candidates';
+import { downloadCandidateReport } from '../utils/candidateReport';
 import { invalidateDashboard } from '../store/slices/dashboardSlice';
 import { invalidateActivity } from '../store/slices/activitySlice';
 
@@ -64,22 +64,13 @@ export default function CandidateDetails() {
     }
   };
 
-  const handleDownloadPdf = async () => {
-    setActionsOpen(false);
+  const handleDownloadPdf = () => {
     setDownloadError('');
     setDownloading(true);
     try {
-      const { blob, filename } = await downloadCandidateResume(id);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename || candidate?.resumeFilename || 'resume.pdf';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      downloadCandidateReport(candidate);
     } catch (err) {
-      setDownloadError(err.message || 'Could not download the PDF');
+      setDownloadError(err?.message || 'Could not generate the PDF');
     } finally {
       setDownloading(false);
     }
@@ -153,7 +144,16 @@ export default function CandidateDetails() {
           </div>
         </div>
 
-        <div className="relative self-start">
+        <div className="flex items-center gap-2 self-start">
+          <button
+            onClick={handleDownloadPdf}
+            disabled={downloading}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm disabled:opacity-50"
+          >
+            <Download className="w-4 h-4 text-slate-400" />
+            {downloading ? 'Generating...' : 'Download PDF'}
+          </button>
+        <div className="relative">
           <button
             onClick={() => setActionsOpen(!actionsOpen)}
             disabled={saving}
@@ -169,13 +169,10 @@ export default function CandidateDetails() {
                 <button onClick={() => handleAction('Shortlisted')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Shortlist</button>
                 <button onClick={() => handleAction('Human Review')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Move to Review</button>
                 <button onClick={() => handleAction('Rejected')} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Reject</button>
-                <div className="my-1 border-t border-slate-100" />
-                <button onClick={handleDownloadPdf} disabled={downloading} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                  {downloading ? 'Downloading...' : 'Download PDF'}
-                </button>
               </div>
             </>
           )}
+        </div>
         </div>
       </div>
 
