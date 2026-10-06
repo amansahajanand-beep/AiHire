@@ -19,6 +19,14 @@ function screenedParts(value) {
   };
 }
 
+// "yyyy-mm-dd" from a date input -> local start (or end) of that day in ms; null when empty/invalid.
+function dayBound(value, end) {
+  if (!value) return null;
+  const [y, m, d] = value.split('-').map(Number);
+  if (!y || !m || !d) return null;
+  return end ? new Date(y, m - 1, d, 23, 59, 59, 999).getTime() : new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+}
+
 function compareScreened(a, b, primary, secondary) {
   const pa = screenedParts(a.screenedOn);
   const pb = screenedParts(b.screenedOn);
@@ -86,6 +94,9 @@ export default function Candidates() {
   const [jobFilter, setJobFilter] = useState(searchParams.get('job') || 'All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortBy, setSortBy] = useState('screened-on');
+  const [dateFilter, setDateFilter] = useState('All');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(1);
   const perPage = 7;
 
@@ -94,13 +105,21 @@ export default function Candidates() {
   const filtered = useMemo(() => {
     // Every space-separated keyword must appear somewhere in the candidate's data (case-insensitive, partial).
     const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
+    // Custom Date: inclusive of the whole From day and the whole To day, on the "Screened On" value.
+    const from = dateFilter === 'custom' ? dayBound(fromDate, false) : null;
+    const to = dateFilter === 'custom' ? dayBound(toDate, true) : null;
     return candidates
       .filter((c) => {
         const haystack = searchIndex.get(c.id) || '';
         const matchesSearch = terms.every((term) => haystack.includes(term));
         const matchesJob = jobFilter === 'All' || c.jobId === jobFilter || c.job === jobFilter;
         const matchesStatus = statusFilter === 'All' || c.status === statusFilter || c.humanEvaluation === statusFilter;
-        return matchesSearch && matchesJob && matchesStatus;
+        let matchesDate = true;
+        if (from != null || to != null) {
+          const screened = new Date(c.screenedOn).getTime();
+          matchesDate = Number.isFinite(screened) && (from == null || screened >= from) && (to == null || screened <= to);
+        }
+        return matchesSearch && matchesJob && matchesStatus && matchesDate;
       })
       .sort((a, b) => {
         if (sortBy === 'score-desc') return b.score - a.score;
@@ -110,7 +129,7 @@ export default function Candidates() {
         if (sortBy === 'time') return compareScreened(a, b, 'time', 'day');
         return 0;
       });
-  }, [candidates, searchIndex, search, jobFilter, statusFilter, sortBy]);
+  }, [candidates, searchIndex, search, jobFilter, statusFilter, sortBy, dateFilter, fromDate, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
@@ -137,6 +156,38 @@ export default function Candidates() {
             <div className="flex flex-wrap gap-3">
               <FilterDropdown value={jobFilter} options={jobFilterOptions} onChange={(v) => { setJobFilter(v); setPage(1); }} />
               <FilterDropdown value={statusFilter} options={statusOptions} onChange={(v) => { setStatusFilter(v); setPage(1); }} />
+              <FilterDropdown
+                value={dateFilter}
+                options={[
+                  { value: 'All', label: 'All Dates' },
+                  { value: 'custom', label: 'Custom Date' },
+                ]}
+                onChange={(v) => { setDateFilter(v); setPage(1); }}
+              />
+              {dateFilter === 'custom' && (
+                <>
+                  <label className="flex items-center gap-2 text-sm text-slate-500">
+                    From Date
+                    <input
+                      type="date"
+                      value={fromDate}
+                      max={toDate || undefined}
+                      onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
+                      className="px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-sm text-slate-500">
+                    To Date
+                    <input
+                      type="date"
+                      value={toDate}
+                      min={fromDate || undefined}
+                      onChange={(e) => { setToDate(e.target.value); setPage(1); }}
+                      className="px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </label>
+                </>
+              )}
               <FilterDropdown
                 value={sortBy}
                 options={[
