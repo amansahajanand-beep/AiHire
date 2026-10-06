@@ -203,3 +203,18 @@ def _guess_mime(filename: str) -> str:
 
 def new_upload_id() -> str:
     return str(uuid.uuid4())
+
+
+def delete_object(object_path: str | None) -> bool:
+    """Best-effort delete of one object in the resume bucket. Never raises; returns True when it is gone."""
+    settings = get_settings()
+    key = normalize_object_path(object_path)
+    if not key or key.startswith("http") or not settings.supabase_url or not settings.supabase_service_role_key:
+        return False
+    url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{settings.supabase_resume_bucket}/{key}"
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            resp = client.delete(url, headers=_headers("application/json"))
+            return resp.status_code < 300 or resp.status_code == 404
+    except Exception:
+        return False

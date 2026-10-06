@@ -40,7 +40,7 @@ export function candidateCsvRow(candidate) {
   ];
 }
 
-export default function CandidateTable({ candidates, showJob = true, showScreenedOn = false }) {
+export default function CandidateTable({ candidates, showJob = true, showScreenedOn = false, onDelete }) {
   const navigate = useNavigate();
 
   return (
@@ -102,12 +102,22 @@ export default function CandidateTable({ candidates, showJob = true, showScreene
                   <span className="text-sm text-slate-600">{candidate.isDuplicate ? 'Duplicate' : formatScreeningStatus(candidate.screeningStatus)}</span>
                 </td>
                 <td className="align-middle py-3.5 px-4 text-right">
-                  <button
-                    onClick={() => navigate(`/candidates/${candidate.id}`)}
-                    className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
-                  >
-                    View
-                  </button>
+                  <div className="inline-flex items-center gap-4">
+                    <button
+                      onClick={() => navigate(`/candidates/${candidate.id}`)}
+                      className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 transition-colors"
+                    >
+                      View
+                    </button>
+                    {onDelete && (
+                      <button
+                        onClick={() => onDelete(candidate)}
+                        className="text-sm font-semibold text-red-600 hover:text-red-700 transition-colors"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
