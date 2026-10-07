@@ -3,7 +3,6 @@ import {
   listCandidates,
   getCandidate,
   updateCandidateWorkflow,
-  deleteCandidate,
 } from '../../api/candidates';
 import { shouldFetch } from '../cache';
 
@@ -51,14 +50,6 @@ export const fetchCandidateById = createAsyncThunk(
 export const patchCandidateWorkflow = createAsyncThunk(
   'candidates/patchWorkflow',
   async ({ id, payload }) => updateCandidateWorkflow(id, payload)
-);
-
-export const removeCandidateThunk = createAsyncThunk(
-  'candidates/remove',
-  async (id) => {
-    await deleteCandidate(id);
-    return id;
-  }
 );
 
 const initialState = {
@@ -142,15 +133,6 @@ const candidatesSlice = createSlice({
           status: 'failed',
           error: action.error.message,
         };
-      })
-      .addCase(removeCandidateThunk.fulfilled, (state, action) => {
-        const id = action.payload;
-        delete state.byId[id];
-        Object.keys(state.lists).forEach((key) => {
-          const list = state.lists[key];
-          if (!list?.items) return;
-          list.items = list.items.filter((item) => item.id !== id);
-        });
       })
       .addCase(patchCandidateWorkflow.fulfilled, (state, action) => {
         const c = action.payload;

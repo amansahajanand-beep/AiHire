@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ChevronLeft, ChevronDown, Download, CheckCircle2, Diamond,
@@ -12,11 +11,9 @@ import LoadingState from '../components/ui/LoadingState';
 import { getInitials, formatDate, humanReviewLabel } from '../utils/helpers';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { fetchCandidateById, patchCandidateWorkflow } from '../store/slices/candidatesSlice';
-import { captureCandidatePage, downloadCandidateReportPdf } from '../utils/candidateReport';
+import { downloadCandidateReportPdf } from '../utils/candidateReport';
 import { invalidateDashboard } from '../store/slices/dashboardSlice';
 import { invalidateActivity } from '../store/slices/activitySlice';
-
-const PDF_TABS = ['overview', 'experience', 'education', 'skills'];
 
 const tabs = [
   { id: 'overview', label: 'Overview' },
@@ -43,7 +40,6 @@ export default function CandidateDetails() {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const pageRef = useRef(null);
   const [downloadError, setDownloadError] = useState('');
   const entry = useAppSelector((s) => s.candidates.byId[id]);
   const candidate = entry?.data || null;
@@ -68,29 +64,11 @@ export default function CandidateDetails() {
     }
   };
 
-  // The page shows one tab at a time, so the PDF steps through every detail tab (Overview, Experience,
-  // Education, Skills) and stacks them; the header is captured once. The visitor's tab is restored after.
-  const exportPdf = async () => {
-    const original = activeTab;
-    const captures = [];
-    try {
-      for (const tab of PDF_TABS) {
-        flushSync(() => setActiveTab(tab));
-        await new Promise((resolve) => setTimeout(resolve, 80));
-        const skipHeader = tab !== PDF_TABS[0];
-        captures.push(await captureCandidatePage(pageRef.current, (el) => skipHeader && el.hasAttribute('data-pdf-header')));
-      }
-    } finally {
-      flushSync(() => setActiveTab(original));
-    }
-    await downloadCandidateReportPdf(captures, candidate);
-  };
-
   const handleDownloadPdf = async () => {
     setDownloadError('');
     setDownloading(true);
     try {
-      await exportPdf();
+      await downloadCandidateReportPdf(candidate);
     } catch (err) {
       setDownloadError(err?.message || 'Could not generate the PDF');
     } finally {
@@ -128,9 +106,8 @@ export default function CandidateDetails() {
   const showAnalysis = activeTab === 'overview';
 
   return (
-    <div ref={pageRef} className="space-y-5">
+    <div className="space-y-5">
       <button
-        data-html2canvas-ignore="true"
         onClick={() => navigate('/candidates')}
         className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 transition-colors"
       >
@@ -138,7 +115,7 @@ export default function CandidateDetails() {
         Back to Candidates
       </button>
 
-      <div data-pdf-header="true" className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div className="flex items-start gap-4">
           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center shrink-0 shadow-sm ring-4 ring-white">
             <span className="text-xl font-bold text-white">{getInitials(candidate.name)}</span>
@@ -169,7 +146,7 @@ export default function CandidateDetails() {
           </div>
         </div>
 
-        <div data-html2canvas-ignore="true" className="flex items-center gap-2 self-start">
+        <div className="flex items-center gap-2 self-start">
           <button
             onClick={handleDownloadPdf}
             disabled={downloading}
@@ -204,7 +181,7 @@ export default function CandidateDetails() {
       {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</div>}
       {downloadError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{downloadError}</div>}
 
-      <div data-html2canvas-ignore="true" className="border-b border-slate-200 overflow-x-auto">
+      <div className="border-b border-slate-200 overflow-x-auto">
         <div className="flex min-w-max">
           {tabs.map(({ id: tabId, label }) => (
             <button

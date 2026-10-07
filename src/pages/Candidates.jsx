@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
 import Card from '../components/ui/Card';
@@ -7,11 +7,7 @@ import FilterDropdown from '../components/ui/FilterDropdown';
 import CandidateTable, { CANDIDATE_CSV_HEADERS, candidateCsvRow } from '../components/candidates/CandidateTable';
 import { downloadCsv } from '../utils/csv';
 import LoadingState from '../components/ui/LoadingState';
-import Button from '../components/ui/Button';
 import useCandidates from '../hooks/useCandidates';
-import { useAppDispatch } from '../store/hooks';
-import { removeCandidateThunk } from '../store/slices/candidatesSlice';
-import { invalidateHiringData } from '../store';
 import { getExperienceYears, matchesExperience, parseExperienceQuery } from '../utils/experience';
 
 
@@ -93,7 +89,6 @@ function searchText(c) {
 }
 
 export default function Candidates() {
-  const dispatch = useAppDispatch();
   const { candidates: rawCandidates, jobOptions, statusOptions, loading, error } = useCandidates();
   const candidates = useMemo(() => markDuplicates(rawCandidates), [rawCandidates]);
   const [search, setSearch] = useState('');
@@ -102,9 +97,6 @@ export default function Candidates() {
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortBy, setSortBy] = useState('screened-on');
   const [dateFilter, setDateFilter] = useState('All');
-  const [deleteTarget, setDeleteTarget] = useState(null);
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState('');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
   const [page, setPage] = useState(1);
@@ -149,44 +141,6 @@ export default function Candidates() {
   }, [candidates, searchIndex, experienceYears, search, jobFilter, statusFilter, sortBy, dateFilter, fromDate, toDate]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-
-  // After deleting the last row of a page, step back to the last page that still exists.
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
-
-  const closeDeleteDialog = () => {
-    if (deleting) return;
-    setDeleteTarget(null);
-    setDeleteError('');
-  };
-
-  const confirmDelete = async () => {
-    if (!deleteTarget || deleting) return;
-    setDeleting(true);
-    setDeleteError('');
-    try {
-      await dispatch(removeCandidateThunk(deleteTarget.id)).unwrap();
-      invalidateHiringData(dispatch);
-      setDeleteTarget(null);
-    } catch (err) {
-      setDeleteError(err?.message || 'Failed to delete candidate');
-    } finally {
-      setDeleting(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!deleteTarget) return undefined;
-    const onKey = (e) => {
-      if (e.key === 'Escape' && !deleting) {
-        setDeleteTarget(null);
-        setDeleteError('');
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [deleteTarget, deleting]);
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
   const jobFilterOptions = [{ value: 'All', label: 'All Jobs' }, ...jobOptions];
 
@@ -272,7 +226,7 @@ export default function Candidates() {
         ) : error ? (
           <div className="p-8 text-center text-sm text-red-600">{error.message || 'Failed to load candidates'}</div>
         ) : (
-          <CandidateTable candidates={paged} showJob showScreenedOn onDelete={(c) => { setDeleteError(''); setDeleteTarget(c); }} />
+          <CandidateTable candidates={paged} showJob showScreenedOn />
         )}
 
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-4 border-t border-slate-100">
@@ -308,38 +262,6 @@ export default function Candidates() {
           </div>
         </div>
       </Card>
-      {deleteTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
-          onClick={closeDeleteDialog}
-        >
-          <div
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="delete-candidate-title"
-            className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-slate-200 p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 id="delete-candidate-title" className="text-base font-semibold text-slate-900">
-              Are you sure you want to delete this candidate?
-            </h2>
-            <p className="text-sm text-slate-500 mt-1.5 break-words">{deleteTarget.name}</p>
-            {deleteError && (
-              <div className="mt-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-3 py-2.5">
-                {deleteError}
-              </div>
-            )}
-            <div className="mt-6 flex justify-end gap-3">
-              <Button variant="secondary" onClick={closeDeleteDialog} disabled={deleting}>
-                Cancel
-              </Button>
-              <Button variant="danger" onClick={confirmDelete} disabled={deleting}>
-                {deleting ? 'Deleting...' : 'Delete'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

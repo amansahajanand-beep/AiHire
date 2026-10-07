@@ -34,13 +34,7 @@ from app.screening_profiles import (
     parse_timestamp,
     screened_to_candidate_dict,
 )
-from app.storage import (
-    StorageError,
-    delete_object,
-    normalize_object_path,
-    refresh_resume_url,
-    upload_resume_bytes,
-)
+from app.storage import StorageError, refresh_resume_url, upload_resume_bytes
 
 router = APIRouter(prefix="/api", tags=["Screening & Candidates"])
 settings = get_settings()
@@ -836,65 +830,6 @@ def download_candidate_resume(
         media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename=\"{filename}\"; filename*=UTF-8''{quote(filename)}"},
     )
-
-
-def _resume_is_exclusive(db: Session, object_path: str | None, *, screened_id: str | None, candidate_id: str | None) -> bool:
-    """True only when no other screening/candidate record points at the same stored resume file."""
-    key = normalize_object_path(object_path)
-    if not key or key.startswith("http"):
-        return False
-    bucket = (settings.supabase_resume_bucket or "Resume").strip("/")
-    variants = {key, f"{bucket}/{key}"}
-    others = db.query(ScreenedProfile.row_id).filter(ScreenedProfile.file_path.in_(variants))
-    if screened_id:
-        others = others.filter(ScreenedProfile.row_id != screened_id)
-    if others.first():
-        return False
-    others = db.query(Candidate.id).filter(Candidate.file_path.in_(variants))
-    if candidate_id:
-        others = others.filter(Candidate.id != candidate_id)
-    return others.first() is None
-
-
-@router.delete("/candidates/{candidate_id}", status_code=204)
-def delete_candidate(
-    candidate_id: str,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """
-    Delete one candidate: the live screening record (or, failing that, a legacy upload record) with this id.
-    The job is never touched. The stored resume file is removed only if no other record references it.
-    """
-    screened = (
-        db.query(ScreenedProfile)
-        .filter(
-            ScreenedProfile.row_id == candidate_id,
-            ScreenedProfile.client_id == current_user.client_id,
-        )
-        .first()
-    )
-    if screened:
-        file_path = screened.file_path
-        exclusive = _resume_is_exclusive(db, file_path, screened_id=screened.row_id, candidate_id=None)
-        db.delete(screened)
-    else:
-        legacy = (
-            db.query(Candidate)
-            .filter(Candidate.id == candidate_id, Candidate.user_id == current_user.id)
-            .first()
-        )
-        if not legacy:
-            raise HTTPException(status_code=404, detail="Candidate not found")
-        file_path = legacy.file_path
-        exclusive = _resume_is_exclusive(db, file_path, screened_id=None, candidate_id=legacy.id)
-        db.delete(legacy)
-
-    db.commit()
-    invalidate_client(current_user.client_id)
-    if exclusive:
-        delete_object(file_path)  # best effort after the record is gone; a storage hiccup must not fail the delete
-    return Response(status_code=204)
 
 
 @router.patch("/candidates/{candidate_id}/workflow", response_model=CandidateOut)

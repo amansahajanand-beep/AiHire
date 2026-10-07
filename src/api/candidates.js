@@ -1,4 +1,4 @@
-import { apiDownload, apiGet, apiPatchJson, apiDelete } from './client';
+import { apiDownload, apiGet, apiPatchJson } from './client';
 
 export async function listCandidates({ jobId, status } = {}) {
   const params = new URLSearchParams();
@@ -28,10 +28,6 @@ export async function updateCandidateWorkflow(candidateId, payload) {
 
 export async function downloadCandidateResume(candidateId) {
   return apiDownload(`/api/candidates/${candidateId}/resume`);
-}
-
-export async function deleteCandidate(candidateId) {
-  return apiDelete(`/api/candidates/${candidateId}`);
 }
 
 export async function getDashboardTotals() {
