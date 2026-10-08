@@ -4,7 +4,8 @@ import logo from '../../assets/logo.png';
 const navItems = [
   { to: { pathname: '/', hash: 'features' }, label: 'Features', hash: '#features' },
   { to: { pathname: '/', hash: 'how-it-works' }, label: 'How It Works', hash: '#how-it-works' },
-  { to: '/pricing', label: 'Pricing' },
+  // Temporarily disabled: stays visible but does nothing when clicked. Remove `disabled` to restore the link.
+  { to: '/pricing', label: 'Pricing', disabled: true },
 ];
 
 export default function PublicHeader() {
@@ -21,7 +22,15 @@ export default function PublicHeader() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-7">
-          {navItems.map((item) => (
+          {navItems.map((item) => (item.disabled ? (
+            <span
+              key={item.label}
+              aria-disabled="true"
+              className="text-sm font-medium transition-colors text-slate-600 hover:text-slate-900 cursor-pointer"
+            >
+              {item.label}
+            </span>
+          ) : (
             <NavLink
               key={item.label}
               to={item.to}
@@ -36,12 +45,16 @@ export default function PublicHeader() {
             >
               {item.label}
             </NavLink>
-          ))}
+          )))}
         </nav>
 
         <div className="flex items-center gap-3">
           <nav className="flex md:hidden items-center gap-1.5 min-w-0">
-            {navItems.map((item) => (
+            {navItems.map((item) => (item.disabled ? (
+              <span key={item.label} aria-disabled="true" className="text-xs font-medium text-slate-600 cursor-pointer">
+                {item.label}
+              </span>
+            ) : (
               <NavLink
                 key={item.label}
                 to={item.to}
@@ -54,7 +67,7 @@ export default function PublicHeader() {
               >
                 {item.label}
               </NavLink>
-            ))}
+            )))}
           </nav>
           <Link
             to="/login"

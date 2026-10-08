@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import re
 from urllib.parse import quote
@@ -517,6 +517,31 @@ def _hiring_pipeline_uncached(db: Session, current_user: User) -> PipelineRespon
     return PipelineResponse(stages=stages)
 
 
+def _utc_iso(value: datetime | None) -> str:
+    """
+    ISO-8601 in UTC with a trailing Z, e.g. 2026-10-06T12:24:35.280Z.
+    Naive datetimes (our own created_at / updated_at columns) are UTC by definition; aware ones are converted.
+    Every activity uses this one format so the browser can convert it to the viewer's/IST time exactly once.
+    """
+    dt = value or datetime.utcnow()
+    dt = dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+    return dt.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _utc_iso_from_text(text: str | None) -> str:
+    """
+    Parse an n8n 'Timestamp' string such as 2026-10-06T17:54:55.077+05:30 keeping its offset, then return UTC.
+    A value with no offset is treated as UTC; an unreadable value falls back to now.
+    """
+    raw = (text or "").strip()
+    if raw:
+        try:
+            return _utc_iso(datetime.fromisoformat(raw.replace("Z", "+00:00")))
+        except ValueError:
+            pass
+    return _utc_iso(None)
+
+
 @router.get("/hiring-activity", response_model=HiringActivityResponse)
 def hiring_activity(
     type_filter: str | None = Query(default=None, alias="type"),
@@ -557,7 +582,7 @@ def _hiring_activity_uncached(
                     title="Job saved as draft",
                     description=f"{job.title} saved as draft",
                     user=actor,
-                    timestamp=(job.created_at or datetime.utcnow()).isoformat(),
+                    timestamp=_utc_iso(job.created_at),
                     icon="FileText",
                 )
             )
@@ -569,7 +594,7 @@ def _hiring_activity_uncached(
                     title="Job put on hold" if status == "on hold" else "Job closed",
                     description=f"{job.title} position {status}",
                     user=actor,
-                    timestamp=(job.updated_at or job.created_at or datetime.utcnow()).isoformat(),
+                    timestamp=_utc_iso(job.updated_at or job.created_at),
                     icon="XCircle",
                 )
             )
@@ -581,7 +606,7 @@ def _hiring_activity_uncached(
                     title="New job published",
                     description=f"{job.title} job published",
                     user=actor,
-                    timestamp=(job.created_at or datetime.utcnow()).isoformat(),
+                    timestamp=_utc_iso(job.created_at),
                     icon="Briefcase",
                 )
             )
@@ -610,7 +635,7 @@ def _hiring_activity_uncached(
                 title="Resumes uploaded",
                 description=f"{len(group)} resume{'s' if len(group) != 1 else ''} uploaded for {job_title}",
                 user=actor,
-                timestamp=(latest.created_at or datetime.utcnow()).isoformat(),
+                timestamp=_utc_iso(latest.created_at),
                 icon="Upload",
             )
         )
@@ -623,8 +648,7 @@ def _hiring_activity_uncached(
     for row in screened_rows:
         name = row.candidate_name or "Candidate"
         role = title_map.get(row.job_code or "") or row.applied_role or "a role"
-        ts = parse_timestamp(row.timestamp) or datetime.utcnow()
-        ts_iso = ts.isoformat()
+        ts_iso = _utc_iso_from_text(row.timestamp)
         rid = str(row.row_id)
 
         activities.append(

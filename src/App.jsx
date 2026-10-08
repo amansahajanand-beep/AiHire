@@ -19,6 +19,9 @@ import AutomationSolutions from './pages/AutomationSolutions';
 import HiringActivity from './pages/HiringActivity';
 import Settings from './pages/Settings';
 
+// Temporarily disabled: set to true to bring the /pricing page back (the Pricing page code is untouched).
+const PRICING_ENABLED = false;
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -26,7 +29,7 @@ export default function App() {
         <Route element={<GuestRoute />}>
           <Route element={<PublicLayout />}>
             <Route path="/" element={<Landing />} />
-            <Route path="/pricing" element={<Pricing />} />
+            {PRICING_ENABLED && <Route path="/pricing" element={<Pricing />} />}
           </Route>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />

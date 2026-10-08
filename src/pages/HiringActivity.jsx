@@ -18,8 +18,11 @@ const typeColors = {
   rejected: 'bg-red-100 text-red-600',
 };
 
+// The API sends UTC ("...Z"). Convert once, to India Standard Time, for display. A value with no
+// timezone marker is treated as UTC so it is never read as the browser's local time.
 function formatFullTimestamp(ts) {
-  const date = new Date(ts);
+  const raw = String(ts ?? '').trim();
+  const date = new Date(/[zZ]$|[+-]\d{2}:?\d{2}$/.test(raw) ? raw : `${raw}Z`);
   if (Number.isNaN(date.getTime())) return '—';
   return date.toLocaleString('en-GB', {
     day: 'numeric',
@@ -28,6 +31,7 @@ function formatFullTimestamp(ts) {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
+    timeZone: 'Asia/Kolkata',
   });
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Plus,
@@ -16,10 +16,24 @@ import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import LoadingState from '../components/ui/LoadingState';
+import SearchInput from '../components/ui/SearchInput';
+import FilterDropdown from '../components/ui/FilterDropdown';
 import useJobs from '../hooks/useJobs';
 import { getStatusColor, formatDate, getScoreColor } from '../utils/helpers';
 
 const tabs = ['All Jobs', 'Published', 'Draft', 'Closed', 'On Hold'];
+
+const sortOptions = [
+  { value: 'newest', label: 'Sort by: Newest' },
+  { value: 'oldest', label: 'Sort by: Oldest' },
+  { value: 'title-asc', label: 'Sort by: Job Title A-Z' },
+  { value: 'title-desc', label: 'Sort by: Job Title Z-A' },
+];
+
+function createdTime(job) {
+  const t = new Date(job.createdOn).getTime();
+  return Number.isNaN(t) ? null : t;
+}
 
 const MENU_WIDTH = 208;
 
@@ -51,6 +65,8 @@ export default function Jobs() {
   const location = useLocation();
   const { jobs, loading, error, updateJob, removeJob } = useJobs();
   const [activeTab, setActiveTab] = useState('All Jobs');
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('newest');
   const [menu, setMenu] = useState(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState(null);
@@ -58,7 +74,29 @@ export default function Jobs() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState('');
 
-  const displayJobs = activeTab === 'All Jobs' ? jobs : jobs.filter((j) => j.status === activeTab);
+  const displayJobs = useMemo(() => {
+    const tabJobs = activeTab === 'All Jobs' ? jobs : jobs.filter((j) => j.status === activeTab);
+    // Every space-separated word must appear in the title, job ID or another job field (case-insensitive).
+    const terms = search.toLowerCase().split(/\s+/).filter(Boolean);
+    const matches = terms.length === 0
+      ? tabJobs
+      : tabJobs.filter((j) => {
+        const haystack = [j.title, j.jobCode, j.id, j.department, j.location, j.employmentType, j.status]
+          .map((v) => String(v ?? '').toLowerCase())
+          .join(' ');
+        return terms.every((term) => haystack.includes(term));
+      });
+    return [...matches].sort((a, b) => {
+      if (sortBy === 'title-asc') return String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' });
+      if (sortBy === 'title-desc') return String(b.title || '').localeCompare(String(a.title || ''), undefined, { sensitivity: 'base' });
+      const ta = createdTime(a);
+      const tb = createdTime(b);
+      if (ta == null && tb == null) return 0;
+      if (ta == null) return 1; // jobs without a date go last
+      if (tb == null) return -1;
+      return sortBy === 'oldest' ? ta - tb : tb - ta;
+    });
+  }, [jobs, activeTab, search, sortBy]);
   const menuJob = menu ? jobs.find((j) => j.id === menu.jobId) : null;
 
   useEffect(() => {
@@ -201,6 +239,18 @@ export default function Jobs() {
           </div>
         </div>
 
+        <div className="p-4 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <SearchInput
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by job title or job ID..."
+              className="flex-1"
+            />
+            <FilterDropdown value={sortBy} options={sortOptions} onChange={setSortBy} className="sm:w-56" />
+          </div>
+        </div>
+
         {loading ? (
           <LoadingState message="Loading jobs..." />
         ) : error ? (
@@ -221,6 +271,13 @@ export default function Jobs() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
+                {displayJobs.length === 0 && search.trim() && (
+                  <tr>
+                    <td colSpan={8} className="py-10 px-4 text-center text-sm text-slate-500">
+                      No jobs match your search.
+                    </td>
+                  </tr>
+                )}
                 {displayJobs.map((job) => {
                   const scoreColors = job.avgScore > 0 ? getScoreColor(job.avgScore) : null;
                   return (
@@ -263,7 +320,7 @@ export default function Jobs() {
         )}
 
         <div className="px-4 py-3 border-t border-slate-100">
-          <p className="text-sm text-slate-500">Showing 1 to {displayJobs.length} of {displayJobs.length} jobs.</p>
+          <p className="text-sm text-slate-500">Showing {displayJobs.length === 0 ? 0 : 1} to {displayJobs.length} of {displayJobs.length} jobs.</p>
         </div>
       </Card>
 
@@ -293,8 +350,10 @@ export default function Jobs() {
                   onClick={() => changeStatus(menuJob, a.status)}
                 />
               ))}
+            {/* "Delete Job" is temporarily hidden: restore the divider and this item to re-enable it.
             <div className="my-1.5 border-t border-slate-100" />
             <MenuItem icon={Trash2} label="Delete Job" danger disabled={busy} onClick={() => deleteJob(menuJob)} />
+            */}
           </div>
         </>
       )}
