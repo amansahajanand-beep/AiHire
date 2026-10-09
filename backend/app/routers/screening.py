@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from pydantic import RootModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -97,27 +98,29 @@ def _candidate_out_legacy(c: Candidate, job_title: str | None = None) -> Candida
     )
 
 
-def _merge_stored_profile_details(db: Session, data: dict, client_id: str) -> dict:
-    """Fill skills/education/experience missing from the screened row with the local Candidate's copy."""
+def _merge_stored_profile_details(
+    db: Session, data: dict, client_id: str, uploads: list[Candidate] | None = None
+) -> dict:
+    """Fill skills/education/experience missing from the screened row with the local Candidate's copy.
+
+    Pass `uploads` (this client's Candidate rows, newest first) to match in memory instead of querying per row.
+    """
     if data.get("skills") and data.get("education") and data.get("experience_history"):
         return data
-    q = db.query(Candidate).filter(Candidate.client_id == client_id)
-    matched: Candidate | None = None
     email = (data.get("email") or "").strip().lower()
     name = (data.get("name") or "").strip().lower()
 
-    if email:
-        matched = (
-            q.filter(Candidate.email.ilike(email))
-            .order_by(Candidate.updated_at.desc())
-            .first()
-        )
-    if matched is None and name:
-        matched = (
-            q.filter(Candidate.name.ilike(name))
-            .order_by(Candidate.updated_at.desc())
-            .first()
-        )
+    if uploads is not None:
+        matched = next((c for c in uploads if email and (c.email or "").strip().lower() == email), None)
+        if matched is None and name:
+            matched = next((c for c in uploads if (c.name or "").strip().lower() == name), None)
+    else:
+        q = db.query(Candidate).filter(Candidate.client_id == client_id)
+        matched = None
+        if email:
+            matched = q.filter(Candidate.email.ilike(email)).order_by(Candidate.updated_at.desc()).first()
+        if matched is None and name:
+            matched = q.filter(Candidate.name.ilike(name)).order_by(Candidate.updated_at.desc()).first()
 
     if matched is None:
         return data
@@ -773,9 +776,37 @@ def list_candidates(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Served from Redis when possible; uploads, jobs and human actions bump the client's cache version.
+    cached = cached_model(
+        "candidates",
+        current_user.client_id,
+        _CandidateList,
+        lambda: _CandidateList(_list_candidates_uncached(db, current_user, job_id, status_filter)),
+        extra=f"{current_user.id}:{job_id or ''}:{(status_filter or '').lower()}",
+    )
+    return cached.root
+
+
+class _CandidateList(RootModel[list[CandidateOut]]):
+    pass
+
+
+def _list_candidates_uncached(
+    db: Session, current_user: User, job_id: str | None, status_filter: str | None
+) -> list[CandidateOut]:
     repair_profile_job_codes(db, current_user.client_id)
-    job_code = _job_id_to_code(db, current_user.id, job_id)
-    title_map = _job_code_title_map(db, current_user.client_id)
+
+    # One query each for jobs and uploads, instead of several queries (and a signed-URL call) per candidate.
+    jobs = db.query(Job).filter(Job.client_id == current_user.client_id).all()
+    jobs_by_code = {j.job_code: j for j in jobs if j.job_code}
+    title_map = {code: j.title for code, j in jobs_by_code.items()}
+    job_code = next((j.job_code for j in jobs if j.id == job_id and j.user_id == current_user.id), None) if job_id else None
+    uploads = (
+        db.query(Candidate)
+        .filter(Candidate.client_id == current_user.client_id)
+        .order_by(Candidate.updated_at.desc())
+        .all()
+    )
 
     q = db.query(ScreenedProfile).filter(ScreenedProfile.client_id == current_user.client_id)
     if job_code:
@@ -788,20 +819,16 @@ def list_candidates(
     results: list[CandidateOut] = []
     for row in rows:
         data = screened_to_candidate_dict(row, title_map.get(row.job_code or ""))
-        data = _enrich_screened_out(data, row)
+        # The list doesn't need a signed resume link; the details endpoint mints one when a candidate is opened.
+        data["resume_url"] = None
         if status_filter and status_filter.lower() != "all":
             if (data.get("status") or "").lower() != status_filter.lower():
                 continue
-        # Attach local job_id when job_code matches
-        job = (
-            db.query(Job)
-            .filter(Job.client_id == current_user.client_id, Job.job_code == row.job_code)
-            .first()
-        )
+        job = jobs_by_code.get(row.job_code or "")
         if job:
             data["job_id"] = job.id
             data["job"] = job.title
-        data = _merge_stored_profile_details(db, data, current_user.client_id)
+        data = _merge_stored_profile_details(db, data, current_user.client_id, uploads)
         results.append(_candidate_out_from_dict(data))
 
     # Include pending upload placeholders not yet written to Screened profile
@@ -811,8 +838,9 @@ def list_candidates(
     )
     if job_id:
         pending_q = pending_q.filter(Candidate.job_id == job_id)
+    jobs_by_id = {j.id: j for j in jobs}
     for c in pending_q.order_by(Candidate.created_at.desc()).all():
-        job = db.get(Job, c.job_id)
+        job = jobs_by_id.get(c.job_id)
         results.append(_candidate_out_legacy(c, job.title if job else None))
 
     return results
