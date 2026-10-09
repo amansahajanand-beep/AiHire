@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { getInitials, getStatusColor, formatDate, humanReviewLabel } from '../../utils/helpers';
 import MatchScoreBadge from './MatchScoreBadge';
+import HumanReviewLabel from './HumanReviewLabel';
 import Badge from '../ui/Badge';
 
 const statusDisplay = {
@@ -86,7 +87,7 @@ export default function CandidateTable({ candidates, showJob = true, showScreene
                   </Badge>
                 </td>
                 <td className="align-middle py-3.5 px-4">
-                  <span className="text-sm text-slate-600">{humanReviewLabel(candidate.humanEvaluation)}</span>
+                  <HumanReviewLabel evaluation={candidate.humanEvaluation} note={candidate.humanNote} />
                 </td>
                 {showScreenedOn && (
                   <td className="align-middle py-3.5 px-4">

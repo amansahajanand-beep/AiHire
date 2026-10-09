@@ -8,7 +8,8 @@ import Card from '../components/ui/Card';
 import MatchScoreRing from '../components/candidates/MatchScoreRing';
 import MatchBreakdown from '../components/candidates/MatchBreakdown';
 import LoadingState from '../components/ui/LoadingState';
-import { getInitials, formatDate, humanReviewLabel } from '../utils/helpers';
+import HumanReviewLabel from '../components/candidates/HumanReviewLabel';
+import { getInitials, formatDate } from '../utils/helpers';
 import { useAppDispatch, useAppSelector } from '../store/hooks';
 import { fetchCandidateById, patchCandidateWorkflow } from '../store/slices/candidatesSlice';
 import { downloadCandidateReportPdf } from '../utils/candidateReport';
@@ -22,6 +23,12 @@ const tabs = [
   { id: 'education', label: 'Education' },
   { id: 'skills', label: 'Skills' },
 ];
+
+const ACTION_TITLES = {
+  Shortlisted: 'Shortlist candidate',
+  'Human Review': 'Move to review',
+  Rejected: 'Reject candidate',
+};
 
 function formatScreenedTime(dateStr) {
   const d = new Date(dateStr);
@@ -39,6 +46,9 @@ export default function CandidateDetails() {
   const [activeTab, setActiveTab] = useState('overview');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState(null); // { evaluation | null, title }
+  const [noteText, setNoteText] = useState('');
+  const [saveError, setSaveError] = useState('');
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState('');
   const entry = useAppSelector((s) => s.candidates.byId[id]);
@@ -50,15 +60,27 @@ export default function CandidateDetails() {
     if (id) dispatch(fetchCandidateById({ id, force: true }));
   }, [dispatch, id]);
 
-  const handleAction = async (evaluation) => {
+  // Choosing an action opens the note dialog first, so the recruiter can record why.
+  const openNoteDialog = (evaluation) => {
     setActionsOpen(false);
+    setSaveError('');
+    setNoteText(candidate?.humanNote || '');
+    setPendingAction({ evaluation, title: evaluation ? ACTION_TITLES[evaluation] : 'Add note' });
+  };
+
+  const handleSave = async () => {
+    const { evaluation } = pendingAction;
     setSaving(true);
+    setSaveError('');
     try {
-      await dispatch(patchCandidateWorkflow({ id, payload: { humanEvaluation: evaluation } })).unwrap();
+      const payload = { humanNote: noteText.trim() };
+      if (evaluation) payload.humanEvaluation = evaluation;
+      await dispatch(patchCandidateWorkflow({ id, payload })).unwrap();
       dispatch(invalidateDashboard());
       dispatch(invalidateActivity());
+      setPendingAction(null);
     } catch (err) {
-      // error stored on slice; surface via entry
+      setSaveError(err?.message || 'Could not save. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -139,7 +161,14 @@ export default function CandidateDetails() {
               <span className="hidden sm:inline text-slate-300">·</span>
               <span className="text-slate-600">Current Location: {candidate.location || '—'}</span>
               <span className="hidden sm:inline text-slate-300">·</span>
-              <span className="text-slate-600">Human Review: {humanReviewLabel(candidate.humanEvaluation)}</span>
+              <span className="text-slate-600">
+                Human Review:{' '}
+                <HumanReviewLabel
+                  evaluation={candidate.humanEvaluation}
+                  note={candidate.humanNote}
+                  className="text-slate-600"
+                />
+              </span>
               <span className="hidden sm:inline text-slate-300">·</span>
               <span className="text-indigo-600 font-medium">{candidate.status || candidate.screeningStatus}</span>
             </div>
@@ -168,15 +197,60 @@ export default function CandidateDetails() {
             <>
               <div className="fixed inset-0 z-40" onClick={() => setActionsOpen(false)} />
               <div className="absolute right-0 top-full mt-1.5 w-48 bg-white rounded-lg border border-slate-200 shadow-lg py-1 z-50">
-                <button onClick={() => handleAction('Shortlisted')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Shortlist</button>
-                <button onClick={() => handleAction('Human Review')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Move to Review</button>
-                <button onClick={() => handleAction('Rejected')} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Reject</button>
+                <button onClick={() => openNoteDialog('Shortlisted')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Shortlist</button>
+                <button onClick={() => openNoteDialog('Human Review')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">Move to Review</button>
+                <button onClick={() => openNoteDialog('Rejected')} className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50">Reject</button>
+                <div className="my-1 border-t border-slate-100" />
+                <button onClick={() => openNoteDialog(null)} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                  {candidate.humanNote ? 'Edit Note' : 'Add Note'}
+                </button>
               </div>
             </>
           )}
         </div>
         </div>
       </div>
+
+      {pendingAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl" role="dialog" aria-modal="true">
+            <h2 className="text-lg font-bold text-slate-900">{pendingAction.title}</h2>
+            <p className="text-sm text-slate-500 mt-1">
+              {pendingAction.evaluation
+                ? 'Add a note explaining the reason for this action (optional).'
+                : 'Add remarks or feedback about this candidate.'}
+            </p>
+            <textarea
+              autoFocus
+              rows={5}
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              maxLength={2000}
+              placeholder="Write your note here…"
+              className="mt-4 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+            />
+            {saveError && <p className="mt-2 text-sm text-red-600">{saveError}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                onClick={() => setPendingAction(null)}
+                disabled={saving}
+                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold text-white disabled:opacity-50 ${
+                  pendingAction.evaluation === 'Rejected' ? 'bg-red-600 hover:bg-red-700' : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+              >
+                {saving ? 'Saving…' : pendingAction.evaluation ? 'Confirm' : 'Save note'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {error && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{error}</div>}
       {downloadError && <div className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3">{downloadError}</div>}
@@ -240,12 +314,29 @@ export default function CandidateDetails() {
             </ul>
           </Card>
 
+          <Card className="!p-6 lg:col-span-2">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold text-slate-900">Recruiter Note</h3>
+              <button
+                onClick={() => openNoteDialog(null)}
+                className="text-sm font-medium text-indigo-600 hover:text-indigo-700"
+              >
+                {candidate.humanNote ? 'Edit' : 'Add note'}
+              </button>
+            </div>
+            {candidate.humanNote ? (
+              <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">{candidate.humanNote}</p>
+            ) : (
+              <p className="text-sm text-slate-400">No note yet. Add remarks or the reason for your decision.</p>
+            )}
+          </Card>
+
           {(candidate.summary || candidate.growthPattern) && (
             <Card className="!p-6 lg:col-span-2">
-              <h3 className="text-base font-bold text-slate-900 mb-3">AI Summary</h3>
+              <h3 className="text-base font-bold text-slate-900 mb-3">Executive Summary</h3>
               {candidate.growthPattern && (
                 <p className="text-sm text-indigo-700 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2 mb-3">
-                  Growth: {candidate.growthPattern}
+                  Growth Pattern: {candidate.growthPattern}
                 </p>
               )}
               <p className="text-sm text-slate-600 whitespace-pre-wrap leading-relaxed">

@@ -15,7 +15,7 @@ export default function AppLayout() {
   // Warm the cache once when the authenticated shell mounts.
   useEffect(() => {
     dispatch(fetchDashboardTotals());
-    dispatch(fetchScreeningOverview({ weeks: 5 }));
+    dispatch(fetchScreeningOverview());
     dispatch(fetchHiringPipeline());
     dispatch(fetchJobs());
     dispatch(fetchCandidates());

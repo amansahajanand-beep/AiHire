@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   AreaChart,
   Area,
@@ -7,16 +7,17 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from 'recharts';
 import Card, { CardHeader } from '../ui/Card';
+import PeriodTabs from './PeriodTabs';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchScreeningOverview } from '../../store/slices/dashboardSlice';
 
 const SERIES = [
   { key: 'screened', name: 'Screened', color: '#6366F1', fillId: 'fillScreened' },
   { key: 'shortlisted', name: 'Shortlisted', color: '#34D399', fillId: 'fillShortlisted' },
-  { key: 'hired', name: 'Hired', color: '#60A5FA', fillId: 'fillHired'    },
+  { key: 'review', name: 'Move to Review', color: '#F59E0B', fillId: 'fillReview' },
+  { key: 'rejected', name: 'Rejected', color: '#FB7185', fillId: 'fillRejected' },
 ];
 
 function ChartTooltip({ active, payload, label }) {
@@ -44,42 +45,50 @@ export default function ScreeningChart() {
   const data = useAppSelector((s) => s.dashboard.overview);
   const status = useAppSelector((s) => s.dashboard.overviewStatus);
   const fetchedAt = useAppSelector((s) => s.dashboard.overviewFetchedAt);
+  const period = useAppSelector((s) => s.dashboard.overviewPeriod);
+  // null = every series; otherwise only that series (click a legend item to isolate it, click again to reset)
+  const [focus, setFocus] = useState(null);
   const loading = status === 'loading' && !fetchedAt;
-  const hasData = data.some((d) => d.screened || d.shortlisted || d.hired);
+  const refreshing = status === 'loading' && !!fetchedAt;
 
   const chartData = useMemo(
     () =>
       (data || []).map((point) => ({
-        month: point.month,
+        label: point.month,
         screened: Number(point.screened) || 0,
         shortlisted: Number(point.shortlisted) || 0,
-        hired: Number(point.hired) || 0,
+        review: Number(point.review) || 0,
+        rejected: Number(point.rejected) || 0,
       })),
     [data]
   );
 
-  const maxY = Math.max(
-    5,
-    ...chartData.map((d) => Math.max(d.screened, d.shortlisted, d.hired))
-  );
+  const visible = SERIES.filter((s) => !focus || s.key === focus);
+  const hasData = chartData.some((d) => SERIES.some((s) => d[s.key]));
+  const maxY = Math.max(5, ...chartData.flatMap((d) => visible.map((s) => d[s.key])));
 
   useEffect(() => {
-    dispatch(fetchScreeningOverview({ weeks: 5 }));
-  }, [dispatch]);
+    dispatch(fetchScreeningOverview({ period }));
+  }, [dispatch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const changePeriod = (next) => {
+    if (next !== period) dispatch(fetchScreeningOverview({ period: next }));
+  };
 
   return (
     <Card className="!rounded-2xl">
       <CardHeader
         title="Candidate Screening Overview"
         subtitle="Candidate movement through screening"
+        action={<PeriodTabs value={period} onChange={changePeriod} />}
       />
-      <div className="h-72">
+      <div className={`h-72 transition-opacity ${refreshing ? 'opacity-50' : ''}`}>
         {loading ? (
           <div className="h-full flex items-center justify-center text-sm text-slate-400">Loading chart…</div>
         ) : !hasData ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-6">
-            <p className="text-sm text-slate-500">No screening activity yet.</p>
-            <p className="text-xs text-slate-400 mt-1">Upload resumes to see the screening graph.</p>
+            <p className="text-sm text-slate-500">No screening activity in this period.</p>
+            <p className="text-xs text-slate-400 mt-1">Upload resumes or try a wider range.</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
@@ -94,11 +103,12 @@ export default function ScreeningChart() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
               <XAxis
-                dataKey="month"
+                dataKey="label"
                 tick={{ fontSize: 12, fill: '#94A3B8' }}
                 axisLine={false}
                 tickLine={false}
                 dy={6}
+                interval="preserveStartEnd"
               />
               <YAxis
                 tick={{ fontSize: 12, fill: '#94A3B8' }}
@@ -108,11 +118,7 @@ export default function ScreeningChart() {
                 allowDecimals={false}
               />
               <Tooltip content={<ChartTooltip />} />
-              <Legend
-                wrapperStyle={{ fontSize: '12px', paddingTop: '12px' }}
-                iconType="circle"
-              />
-              {SERIES.map((series) => (
+              {visible.map((series) => (
                 <Area
                   key={series.key}
                   type="monotone"
@@ -128,6 +134,26 @@ export default function ScreeningChart() {
             </AreaChart>
           </ResponsiveContainer>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-3">
+        {SERIES.map((series) => {
+          const dimmed = focus && focus !== series.key;
+          return (
+            <button
+              key={series.key}
+              type="button"
+              onClick={() => setFocus(focus === series.key ? null : series.key)}
+              title={focus === series.key ? 'Show all' : `Show only ${series.name}`}
+              className={`inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs font-medium transition-opacity hover:bg-slate-50 ${
+                dimmed ? 'opacity-40' : 'text-slate-600'
+              }`}
+            >
+              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: series.color }} />
+              {series.name}
+            </button>
+          );
+        })}
       </div>
     </Card>
   );

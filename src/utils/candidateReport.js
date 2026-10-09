@@ -200,6 +200,7 @@ export async function downloadCandidateReportPdf(candidate) {
       case 'sparkle': poly([[0, -6], [1.5, -1.5], [6, 0], [1.5, 1.5], [0, 6], [-1.5, 1.5], [-6, 0], [-1.5, -1.5]], true); break;
       case 'bulb': circ(0, -1.5, 4); line(-2, 3.4, 2, 3.4); line(-1.2, 5.2, 1.2, 5.2); break;
       case 'trend': poly([[-5.5, 4], [-1.5, 0], [1, 2.4], [5.5, -3]]); poly([[2, -3.4], [5.8, -3.4], [5.8, 0.4]]); break;
+      case 'note': box(-4.5, -5.5, 9, 11, 1.4); line(-2.2, -2, 2.2, -2); line(-2.2, 0.6, 2.2, 0.6); line(-2.2, 3.2, 0.6, 3.2); break;
       case 'chat': box(-6, -4.8, 12, 8.4, 2); poly([[-2.4, 3.6], [-3.4, 6], [0.4, 3.6]]); break;
       case 'grid': box(-5.5, -5.5, 4.4, 4.4, 1); box(1.1, -5.5, 4.4, 4.4, 1); box(-5.5, 1.1, 4.4, 4.4, 1); box(1.1, 1.1, 4.4, 4.4, 1); break;
       default: circ(0, 0, 4);
@@ -220,7 +221,7 @@ export async function downloadCandidateReportPdf(candidate) {
       const h = 28;
       doc.addImage(logo.dataUrl, 'PNG', M, 18, (h * logo.w) / logo.h, h, 'logo', 'FAST');
     }
-    txt('AI CANDIDATE SCREENING REPORT', PW / 2 + 14, 37, { size: 8.5, bold: true, color: C.navy, align: 'center', charSpace: 0.6 });
+    txt('CANDIDATE INTELLIGENCE REPORT', PW / 2 + 14, 37, { size: 8.5, bold: true, color: C.navy, align: 'center', charSpace: 0.6 });
     const date = candidate.screenedOn ? formatDate(candidate.screenedOn) : '-';
     const time = (candidate.screenedOn && timeOf(candidate.screenedOn)) || '';
     const right = PW - M;
@@ -309,6 +310,7 @@ export async function downloadCandidateReportPdf(candidate) {
   const statusText = candidate.status || candidate.screeningStatus || '-';
   const heroLabel = human !== 'N/A' ? human : statusText;
   const heroColor = tone(heroLabel);
+  const humanNote = asText(candidate.humanNote).trim().slice(0, 240) + (asText(candidate.humanNote).trim().length > 240 ? '…' : '');
 
   // ======================= PAGE 1 =======================
   drawHeader();
@@ -334,8 +336,8 @@ export async function downloadCandidateReportPdf(candidate) {
   // Candidate information + Match score
   const infoRows = [
     ['person', 'Applied for', candidate.job || '-', null],
-    ['status', 'Status', statusText, tone(statusText)],
     ['person', 'Human review', human, human === 'N/A' ? null : tone(human)],
+    ...(humanNote ? [['note', 'Note', humanNote, null]] : []),
     ['calendar', 'Screened on', candidate.screenedOn ? formatDate(candidate.screenedOn) : '-', null],
     ['clock', 'Time', (candidate.screenedOn && timeOf(candidate.screenedOn)) || '-', null],
     ['pin', 'Current location', candidate.location || '-', null],
@@ -450,7 +452,7 @@ export async function downloadCandidateReportPdf(candidate) {
   const done = candidate.screeningStatus === 'completed';
   const strengths = candidate.strengths?.length
     ? candidate.strengths.map(asText)
-    : done ? ['See AI Summary'] : ['Screening in progress...'];
+    : done ? ['See Executive Summary'] : ['Screening in progress...'];
   const hasWeak = Boolean(candidate.weaknesses?.length);
   const weaknesses = hasWeak
     ? candidate.weaknesses.map(asText)
@@ -507,13 +509,13 @@ export async function downloadCandidateReportPdf(candidate) {
     if (growth) {
       const growthItems = textItems(growth, growthW - PAD * 2);
       pairCards(
-        { title: 'AI Summary', icon: 'sparkle', items: summaryItems, opts: { fill: C.blueTint, stroke: C.blueLine } },
-        { title: 'Growth', icon: 'trend', items: growthItems, opts: { fill: C.greenTint, stroke: C.greenLine, accent: C.green } },
+        { title: 'Executive Summary', icon: 'sparkle', items: summaryItems, opts: { fill: C.blueTint, stroke: C.blueLine } },
+        { title: 'Growth Pattern', icon: 'trend', items: growthItems, opts: { fill: C.greenTint, stroke: C.greenLine, accent: C.green } },
         summaryW,
         growthW,
       );
     } else {
-      flowCard('AI Summary', 'sparkle', summaryItems, { fill: C.blueTint, stroke: C.blueLine });
+      flowCard('Executive Summary', 'sparkle', summaryItems, { fill: C.blueTint, stroke: C.blueLine });
     }
   }
 
@@ -628,7 +630,7 @@ export async function downloadCandidateReportPdf(candidate) {
         });
       },
     }));
-    flowCard('Skills', 'grid', chipItems);
+    flowCard('Technical Skills', 'grid', chipItems);
   }
 
   // Footer on every page
@@ -638,9 +640,10 @@ export async function downloadCandidateReportPdf(candidate) {
     drawC(C.border);
     doc.setLineWidth(0.8);
     doc.line(M, PH - 40, PW - M, PH - 40);
-    txt(name.toUpperCase(), M, PH - 24, { size: 7.5, bold: true, color: C.navy });
-    txt(`- Candidate Screening Report`, M + widthOf(name.toUpperCase(), 7.5, true) + 4, PH - 24, { size: 7.5, color: C.slate });
-    txt(`Page ${p} of ${pages}`, PW - M, PH - 24, { size: 7.5, color: C.slate, align: 'right' });
+    txt(name.toUpperCase(), M, PH - 28, { size: 7.5, bold: true, color: C.navy });
+    txt(`- Candidate Intelligence Report`, M + widthOf(name.toUpperCase(), 7.5, true) + 4, PH - 28, { size: 7.5, color: C.slate });
+    txt(`Page ${p} of ${pages}`, PW - M, PH - 28, { size: 7.5, color: C.slate, align: 'right' });
+    txt('AI-generated results may be inaccurate. Please verify before making hiring decisions.', PW / 2, PH - 14, { size: 6.5, color: C.slate, align: 'center' });
   }
 
   doc.save(`${fileBase(candidate)}.pdf`);

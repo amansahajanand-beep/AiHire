@@ -17,6 +17,7 @@ export default function StatCard({
   title,
   value,
   caption,
+  detail,
   change,
   trend,
   icon,
@@ -63,6 +64,7 @@ export default function StatCard({
           <p className="stat-card-title text-sm text-slate-500 mb-2 truncate">{title}</p>
           <p className={`stat-card-value ${caption ? 'text-4xl font-extrabold' : 'text-3xl font-bold'} text-slate-900 tracking-tight leading-none`}>{value}</p>
           {caption ? <p className="text-sm font-semibold text-slate-500 mt-1">{caption}</p> : null}
+          {detail ? <p className="text-xs text-slate-400 mt-1.5">{detail}</p> : null}
           {change ? (
             <div className="stat-card-meta flex items-center gap-1 mt-3">
               {trend === 'up' ? (

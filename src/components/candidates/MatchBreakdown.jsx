@@ -1,5 +1,5 @@
 export const labels = {
-  skills: 'Skills',
+  skills: 'Technical Skills',
   experience: 'Experience',
   education: 'Education',
   stability: 'Stability',
@@ -63,7 +63,7 @@ export default function MatchBreakdown({ breakdown }) {
         const max = weightage[key] ?? 100;
         return (
           <div key={key} className="flex items-center gap-4">
-            <span className="text-sm font-medium w-24 shrink-0" style={{ color: style.text }}>{labels[key] || key}</span>
+            <span className="text-sm font-medium w-32 shrink-0" style={{ color: style.text }}>{labels[key] || key}</span>
             <div className="flex-1 h-2.5 bg-slate-100 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-700 ease-out"

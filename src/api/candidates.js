@@ -34,13 +34,16 @@ export async function getDashboardTotals() {
   return apiGet('/api/dashboard/totals');
 }
 
-export async function getScreeningOverview({ weeks = 5 } = {}) {
-  const data = await apiGet(`/api/dashboard/screening-overview?weeks=${weeks}`);
+// JS reports UTC minus local time in minutes; the backend uses it to bucket by the viewer's day.
+const tzOffset = () => new Date().getTimezoneOffset();
+
+export async function getScreeningOverview({ period = 'week' } = {}) {
+  const data = await apiGet(`/api/dashboard/screening-overview?period=${period}&tz_offset=${tzOffset()}`);
   return data?.points || [];
 }
 
-export async function getHiringPipeline() {
-  const data = await apiGet('/api/dashboard/pipeline');
+export async function getHiringPipeline({ period = 'all' } = {}) {
+  const data = await apiGet(`/api/dashboard/pipeline?period=${period}&tz_offset=${tzOffset()}`);
   return data?.stages || [];
 }
 
