@@ -542,13 +542,30 @@ def parse_timestamp(value: Any) -> datetime | None:
         return None
 
 
+_NOTE_RE = re.compile(r"\n*\[Human note\]\n(.*?)(?=\n\n\[Availability\]\n|\Z)", re.S)
+_AVAIL_RE = re.compile(r"\n*\[Availability\]\n(.*?)(?=\n\n\[Human note\]\n|\Z)", re.S)
+
+
+def split_summary_markers(summary: str | None) -> tuple[str | None, str | None, str | None]:
+    """Separate the AI summary from the human note / availability appended to it by the workflow endpoint."""
+    if not summary:
+        return summary, None, None
+    note_m = _NOTE_RE.search(summary)
+    avail_m = _AVAIL_RE.search(summary)
+    clean = _AVAIL_RE.sub("", _NOTE_RE.sub("", summary)).rstrip()
+    note = note_m.group(1).strip() if note_m else None
+    avail = avail_m.group(1).strip() if avail_m else None
+    return clean, note or None, avail or None
+
+
 def screened_to_candidate_dict(row: ScreenedProfile, job_title: str | None = None) -> dict[str, Any]:
     total = parse_score_value(row.total_score)
     experience = parse_score_value(row.experience_score)
     skill = parse_score_value(row.skill_score)
     stability = parse_score_value(row.stability_score)
     education = parse_score_value(row.education_score)
-    summary_strengths, summary_weaknesses = extract_strengths_weaknesses(row.summary)
+    clean_summary, human_note, availability = split_summary_markers(row.summary)
+    summary_strengths, summary_weaknesses = extract_strengths_weaknesses(clean_summary)
     risk_level, risk_points = split_risk_flag(row.risk_flag)
     strengths = parse_text_list(row.strength) or summary_strengths
     weaknesses = risk_points or summary_weaknesses
@@ -603,15 +620,15 @@ def screened_to_candidate_dict(row: ScreenedProfile, job_title: str | None = Non
         "skills": details["skills"],
         "education": details["education"],
         "experience_history": details["experience_history"],
-        "remarks": row.summary,
-        "summary": row.summary,
+        "remarks": clean_summary,
+        "summary": clean_summary,
         "risk": risk_level or row.risk_flag,
         "growth_pattern": row.growth_pattern,
         "interview_questions": parse_interview_questions(row.interview_questions),
         "ai_confidence": row.ai_confident,
         "human_evaluation": row.human_evaluation,
-        "human_note": None,
-        "availability": None,
+        "human_note": human_note,
+        "availability": availability,
         "screened_on": screened_on,
         "created_at": screened_on or datetime.utcnow(),
     }

@@ -24,15 +24,15 @@ export const fetchDashboardTotals = createAsyncThunk(
 
 export const fetchScreeningOverview = createAsyncThunk(
   'dashboard/fetchScreeningOverview',
-  async (arg = {}) => getScreeningOverview({ weeks: arg.weeks ?? 5 }),
+  async (arg = {}) => getScreeningOverview({ period: arg.period ?? 'week' }),
   {
     condition: (arg, { getState }) => {
-      const { overview, overviewStatus, overviewFetchedAt } = getState().dashboard;
+      const { overview, overviewStatus, overviewFetchedAt, overviewPeriod } = getState().dashboard;
       return shouldFetch({
-        force: arg?.force,
+        force: arg?.force || (arg?.period ?? 'week') !== overviewPeriod,
         status: overviewStatus,
         fetchedAt: overviewFetchedAt,
-        hasData: Array.isArray(overview) && overview.length >= 0 && overviewFetchedAt != null,
+        hasData: Array.isArray(overview) && overviewFetchedAt != null,
       });
     },
   }
@@ -40,12 +40,12 @@ export const fetchScreeningOverview = createAsyncThunk(
 
 export const fetchHiringPipeline = createAsyncThunk(
   'dashboard/fetchPipeline',
-  async () => getHiringPipeline(),
+  async (arg = {}) => getHiringPipeline({ period: arg.period ?? 'all' }),
   {
     condition: (arg, { getState }) => {
-      const { pipeline, pipelineStatus, pipelineFetchedAt } = getState().dashboard;
+      const { pipeline, pipelineStatus, pipelineFetchedAt, pipelinePeriod } = getState().dashboard;
       return shouldFetch({
-        force: arg?.force,
+        force: arg?.force || (arg?.period ?? 'all') !== pipelinePeriod,
         status: pipelineStatus,
         fetchedAt: pipelineFetchedAt,
         hasData: Array.isArray(pipeline) && pipelineFetchedAt != null,
@@ -64,11 +64,13 @@ const initialState = {
   overviewStatus: 'idle',
   overviewError: null,
   overviewFetchedAt: null,
+  overviewPeriod: 'week',
 
   pipeline: [],
   pipelineStatus: 'idle',
   pipelineError: null,
   pipelineFetchedAt: null,
+  pipelinePeriod: 'all',
 };
 
 const dashboardSlice = createSlice({
@@ -99,8 +101,9 @@ const dashboardSlice = createSlice({
         state.totalsStatus = 'failed';
         state.totalsError = action.error.message;
       })
-      .addCase(fetchScreeningOverview.pending, (state) => {
+      .addCase(fetchScreeningOverview.pending, (state, action) => {
         state.overviewStatus = 'loading';
+        state.overviewPeriod = action.meta.arg?.period ?? 'week';
         state.overviewError = null;
       })
       .addCase(fetchScreeningOverview.fulfilled, (state, action) => {
@@ -112,8 +115,9 @@ const dashboardSlice = createSlice({
         state.overviewStatus = 'failed';
         state.overviewError = action.error.message;
       })
-      .addCase(fetchHiringPipeline.pending, (state) => {
+      .addCase(fetchHiringPipeline.pending, (state, action) => {
         state.pipelineStatus = 'loading';
+        state.pipelinePeriod = action.meta.arg?.period ?? 'all';
         state.pipelineError = null;
       })
       .addCase(fetchHiringPipeline.fulfilled, (state, action) => {

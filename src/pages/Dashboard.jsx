@@ -88,8 +88,8 @@ export default function Dashboard() {
         title: 'Awaiting',
         value: String(totals.awaitingReview ?? 0),
         caption: 'Human review',
+        detail: `${totals.humanReviewed ?? 0} reviewed of ${totals.candidatesScreened ?? 0} screened`,
         icon: 'UserCheck',
-        subtitle: totals.awaitingReview ? 'Needs your decision' : 'No data this month',
       },
       {
         title: 'Average Match Score',

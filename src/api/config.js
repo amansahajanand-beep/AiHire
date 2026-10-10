@@ -1,8 +1,9 @@
-const useProxy = import.meta.env.VITE_USE_PROXY !== 'false';
+// The Vite proxy only exists in `npm run dev`; deployed builds must call the API directly.
+const useProxy = import.meta.env.DEV && import.meta.env.VITE_USE_PROXY !== 'false';
 
 export const apiConfig = {
   // When proxy is on, browser calls same-origin /api → Vite → FastAPI
-  baseUrl: useProxy ? '' : (import.meta.env.VITE_API_BASE_URL || 'https://ai-hire-chi.vercel.app//'),
+  baseUrl: useProxy ? '' : (import.meta.env.VITE_API_BASE_URL || 'https://ai-hire-chi.vercel.app'),
 };
 
 export function getToken() {

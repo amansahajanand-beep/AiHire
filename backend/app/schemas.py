@@ -269,6 +269,7 @@ class DashboardTotals(BaseModel):
     jobsAdded: int
     candidatesScreened: int
     awaitingReview: int
+    humanReviewed: int = 0
     averageMatchScore: float
     # Real AI timing: created_at (upload/API start) → screened_on (result received)
     timedCandidates: int = 0
@@ -283,7 +284,8 @@ class ScreeningChartPoint(BaseModel):
     month: str
     screened: int
     shortlisted: int
-    hired: int
+    review: int = 0
+    rejected: int = 0
 
 
 class ScreeningOverviewResponse(BaseModel):

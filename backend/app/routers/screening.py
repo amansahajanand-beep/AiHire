@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from pydantic import RootModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -33,6 +34,7 @@ from app.screening_profiles import (
     parse_score_value,
     parse_timestamp,
     screened_to_candidate_dict,
+    split_summary_markers,
 )
 from app.storage import StorageError, refresh_resume_url, upload_resume_bytes
 
@@ -96,27 +98,29 @@ def _candidate_out_legacy(c: Candidate, job_title: str | None = None) -> Candida
     )
 
 
-def _merge_stored_profile_details(db: Session, data: dict, client_id: str) -> dict:
-    """Fill skills/education/experience missing from the screened row with the local Candidate's copy."""
+def _merge_stored_profile_details(
+    db: Session, data: dict, client_id: str, uploads: list[Candidate] | None = None
+) -> dict:
+    """Fill skills/education/experience missing from the screened row with the local Candidate's copy.
+
+    Pass `uploads` (this client's Candidate rows, newest first) to match in memory instead of querying per row.
+    """
     if data.get("skills") and data.get("education") and data.get("experience_history"):
         return data
-    q = db.query(Candidate).filter(Candidate.client_id == client_id)
-    matched: Candidate | None = None
     email = (data.get("email") or "").strip().lower()
     name = (data.get("name") or "").strip().lower()
 
-    if email:
-        matched = (
-            q.filter(Candidate.email.ilike(email))
-            .order_by(Candidate.updated_at.desc())
-            .first()
-        )
-    if matched is None and name:
-        matched = (
-            q.filter(Candidate.name.ilike(name))
-            .order_by(Candidate.updated_at.desc())
-            .first()
-        )
+    if uploads is not None:
+        matched = next((c for c in uploads if email and (c.email or "").strip().lower() == email), None)
+        if matched is None and name:
+            matched = next((c for c in uploads if (c.name or "").strip().lower() == name), None)
+    else:
+        q = db.query(Candidate).filter(Candidate.client_id == client_id)
+        matched = None
+        if email:
+            matched = q.filter(Candidate.email.ilike(email)).order_by(Candidate.updated_at.desc()).first()
+        if matched is None and name:
+            matched = q.filter(Candidate.name.ilike(name)).order_by(Candidate.updated_at.desc()).first()
 
     if matched is None:
         return data
@@ -196,6 +200,64 @@ def _is_rejected(status: str | None) -> bool:
 def _is_review(status: str | None) -> bool:
     s = _norm_status(status)
     return s in {"", "pending", "human review", "review"} or "review" in s
+
+
+def _decision(row: ScreenedProfile) -> str:
+    """Recruiter decision only: shortlisted | rejected | review | pending.
+
+    The AI recommendation is deliberately ignored, so dashboard counts match what a human actually did.
+    """
+    s = _norm_status(row.human_evaluation)
+    if not s:
+        return "pending"
+    if _is_rejected(s):
+        return "rejected"
+    if "shortlist" in s:
+        return "shortlisted"
+    if "review" in s:
+        return "review"
+    return "pending"
+
+
+_PERIODS = {"day", "week", "month", "year"}
+_BUCKET_COUNT = {"day": 14, "week": 8, "month": 12, "year": 5}
+
+
+def _local_now(tz_offset: int) -> datetime:
+    """Current time in the viewer's timezone (tz_offset is JS getTimezoneOffset(): UTC minus local, minutes)."""
+    return datetime.utcnow() - timedelta(minutes=tz_offset)
+
+
+def _period_start(now: datetime, period: str) -> datetime:
+    """Start of the day / week (Mon) / month / year containing `now`."""
+    day = datetime(now.year, now.month, now.day)
+    if period == "day":
+        return day
+    if period == "week":
+        return day - timedelta(days=day.weekday())
+    if period == "month":
+        return datetime(now.year, now.month, 1)
+    return datetime(now.year, 1, 1)
+
+
+def _shift_period(start: datetime, period: str, n: int) -> datetime:
+    """`start` moved by n periods (negative = back)."""
+    if period == "day":
+        return start + timedelta(days=n)
+    if period == "week":
+        return start + timedelta(weeks=n)
+    if period == "month":
+        idx = start.year * 12 + (start.month - 1) + n
+        return datetime(idx // 12, idx % 12 + 1, 1)
+    return datetime(start.year + n, 1, 1)
+
+
+def _bucket_label(start: datetime, period: str) -> str:
+    if period == "month":
+        return start.strftime("%b %Y")
+    if period == "year":
+        return start.strftime("%Y")
+    return start.strftime("%b %d")
 
 
 def _week_bucket_start(dt: datetime) -> datetime:
@@ -379,11 +441,8 @@ def _dashboard_totals_uncached(db: Session, current_user: User) -> DashboardTota
     scores = [s for s in scores if s is not None]
     avg = round(sum(scores) / len(scores), 1) if scores else 0.0
 
-    awaiting = sum(
-        1
-        for r in screened_rows
-        if (_effective_status(r) or "").lower() in {"", "pending", "human review", "review"}
-    )
+    # Awaiting = no final human decision yet (undecided, or explicitly moved to review)
+    awaiting = sum(1 for r in screened_rows if _decision(r) in {"pending", "review"})
     # Include still-processing uploads
     awaiting += (
         db.query(func.count(Candidate.id))
@@ -401,6 +460,7 @@ def _dashboard_totals_uncached(db: Session, current_user: User) -> DashboardTota
         jobsAdded=int(jobs_count),
         candidatesScreened=int(screened),
         awaitingReview=int(awaiting),
+        humanReviewed=int(sum(1 for r in screened_rows if _decision(r) != "pending")),
         averageMatchScore=avg,
         timedCandidates=int(productivity["timedCandidates"]),
         totalAiSeconds=float(productivity["totalAiSeconds"]),
@@ -413,28 +473,34 @@ def _dashboard_totals_uncached(db: Session, current_user: User) -> DashboardTota
 
 @router.get("/dashboard/screening-overview", response_model=ScreeningOverviewResponse)
 def screening_overview(
-    weeks: int = Query(default=5, ge=1, le=26),
+    period: str = Query(default="week"),
+    tz_offset: int = Query(default=0, ge=-840, le=840),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    period = period if period in _PERIODS else "week"
     return cached_model(
         "overview",
         current_user.client_id,
         ScreeningOverviewResponse,
-        lambda: _screening_overview_uncached(db, current_user, weeks),
-        extra=f"w{weeks}",
+        lambda: _screening_overview_uncached(db, current_user, period, tz_offset),
+        extra=f"{period}:{tz_offset}",
     )
 
 
-def _screening_overview_uncached(db: Session, current_user: User, weeks: int) -> ScreeningOverviewResponse:
-    """Aggregate screened / shortlisted / hired counts by week for the chart."""
-    now = datetime.utcnow()
-    start = _week_bucket_start(now) - timedelta(weeks=weeks - 1)
+def _screening_overview_uncached(
+    db: Session, current_user: User, period: str, tz_offset: int
+) -> ScreeningOverviewResponse:
+    """Screened / shortlisted / review / rejected counts per day, week, month or year.
 
-    buckets: dict[datetime, dict[str, int]] = {
-        start + timedelta(weeks=i): {"screened": 0, "shortlisted": 0, "hired": 0}
-        for i in range(weeks)
-    }
+    Each candidate is counted in the bucket of their screening date; the decision columns show what the
+    recruiter later did with the candidates screened in that bucket.
+    """
+    now = _local_now(tz_offset)
+    count = _BUCKET_COUNT[period]
+    first = _shift_period(_period_start(now, period), period, -(count - 1))
+    starts = [_shift_period(first, period, i) for i in range(count)]
+    buckets = {st: {"screened": 0, "shortlisted": 0, "review": 0, "rejected": 0} for st in starts}
 
     rows = (
         db.query(ScreenedProfile)
@@ -442,77 +508,70 @@ def _screening_overview_uncached(db: Session, current_user: User, weeks: int) ->
         .all()
     )
     for row in rows:
-        dt = parse_timestamp(row.timestamp) or now
-        if dt < start:
+        dt = (parse_timestamp(row.timestamp) or datetime.utcnow()) - timedelta(minutes=tz_offset)
+        if dt < first:
             continue
-        key = _week_bucket_start(dt)
+        key = _period_start(dt, period)
         if key not in buckets:
             continue
         buckets[key]["screened"] += 1
-        if _is_hired(_effective_status(row)):
-            buckets[key]["hired"] += 1
-        elif _is_shortlisted(_effective_status(row)):
-            buckets[key]["shortlisted"] += 1
+        decision = _decision(row)
+        if decision in buckets[key]:
+            buckets[key][decision] += 1
 
-    points = [
-        ScreeningChartPoint(
-            month=_week_label(week),
-            screened=counts["screened"],
-            shortlisted=counts["shortlisted"],
-            hired=counts["hired"],
-        )
-        for week, counts in sorted(buckets.items(), key=lambda item: item[0])
-    ]
-    return ScreeningOverviewResponse(points=points)
+    return ScreeningOverviewResponse(
+        points=[ScreeningChartPoint(month=_bucket_label(st, period), **buckets[st]) for st in starts]
+    )
 
 
 @router.get("/dashboard/pipeline", response_model=PipelineResponse)
 def hiring_pipeline(
+    period: str = Query(default="all"),
+    tz_offset: int = Query(default=0, ge=-840, le=840),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    period = period if period in _PERIODS else "all"
     return cached_model(
-        "pipeline", current_user.client_id, PipelineResponse, lambda: _hiring_pipeline_uncached(db, current_user)
+        "pipeline",
+        current_user.client_id,
+        PipelineResponse,
+        lambda: _hiring_pipeline_uncached(db, current_user, period, tz_offset),
+        extra=f"{period}:{tz_offset}",
     )
 
 
-def _hiring_pipeline_uncached(db: Session, current_user: User) -> PipelineResponse:
-    screened_rows = (
-        db.query(ScreenedProfile)
-        .filter(ScreenedProfile.client_id == current_user.client_id)
-        .all()
-    )
-    pending = (
-        db.query(func.count(Candidate.id))
-        .filter(
-            Candidate.user_id == current_user.id,
-            Candidate.screening_status.in_(["queued", "processing", "failed"]),
-        )
-        .scalar()
-        or 0
-    )
+def _hiring_pipeline_uncached(db: Session, current_user: User, period: str, tz_offset: int) -> PipelineResponse:
+    """Pipeline for the current day / week / month / year (or everything when period is "all")."""
+    since = None
+    if period != "all":
+        since = _period_start(_local_now(tz_offset), period) + timedelta(minutes=tz_offset)  # back to UTC
 
-    applied = len(screened_rows) + int(pending)
-    screened = len(screened_rows)
-    interviewed = 0
-    shortlisted = 0
-    hired = 0
+    screened_rows = [
+        r
+        for r in db.query(ScreenedProfile).filter(ScreenedProfile.client_id == current_user.client_id).all()
+        if since is None or (parse_timestamp(r.timestamp) or datetime.utcnow()) >= since
+    ]
+    pending_q = db.query(func.count(Candidate.id)).filter(
+        Candidate.user_id == current_user.id,
+        Candidate.screening_status.in_(["queued", "processing", "failed"]),
+    )
+    if since is not None:
+        pending_q = pending_q.filter(Candidate.created_at >= since)
+    pending = pending_q.scalar() or 0
 
+    counts = {"shortlisted": 0, "review": 0, "rejected": 0}
     for row in screened_rows:
-        status = _effective_status(row)
-        if _is_hired(status):
-            hired += 1
-        elif _is_shortlisted(status):
-            shortlisted += 1
-        elif _is_review(status):
-            interviewed += 1
+        decision = _decision(row)
+        if decision in counts:
+            counts[decision] += 1
 
     stages = [
-        PipelineStage(stage="Applied", count=applied, color="#6366F1"),
-        PipelineStage(stage="Screened", count=screened, color="#60A5FA"),
-        PipelineStage(stage="Human Review", count=interviewed, color="#34D399"),
-        PipelineStage(stage="Shortlisted", count=shortlisted, color="#FBBF24"),
-        PipelineStage(stage="Hired", count=hired, color="#FB7185"),
+        PipelineStage(stage="Profile Run", count=len(screened_rows) + int(pending), color="#6366F1"),
+        PipelineStage(stage="Screened", count=len(screened_rows), color="#60A5FA"),
+        PipelineStage(stage="Human Review", count=counts["review"], color="#F59E0B"),
+        PipelineStage(stage="Shortlisted", count=counts["shortlisted"], color="#34D399"),
+        PipelineStage(stage="Rejected", count=counts["rejected"], color="#FB7185"),
     ]
     return PipelineResponse(stages=stages)
 
@@ -717,9 +776,37 @@ def list_candidates(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # Served from Redis when possible; uploads, jobs and human actions bump the client's cache version.
+    cached = cached_model(
+        "candidates",
+        current_user.client_id,
+        _CandidateList,
+        lambda: _CandidateList(_list_candidates_uncached(db, current_user, job_id, status_filter)),
+        extra=f"{current_user.id}:{job_id or ''}:{(status_filter or '').lower()}",
+    )
+    return cached.root
+
+
+class _CandidateList(RootModel[list[CandidateOut]]):
+    pass
+
+
+def _list_candidates_uncached(
+    db: Session, current_user: User, job_id: str | None, status_filter: str | None
+) -> list[CandidateOut]:
     repair_profile_job_codes(db, current_user.client_id)
-    job_code = _job_id_to_code(db, current_user.id, job_id)
-    title_map = _job_code_title_map(db, current_user.client_id)
+
+    # One query each for jobs and uploads, instead of several queries (and a signed-URL call) per candidate.
+    jobs = db.query(Job).filter(Job.client_id == current_user.client_id).all()
+    jobs_by_code = {j.job_code: j for j in jobs if j.job_code}
+    title_map = {code: j.title for code, j in jobs_by_code.items()}
+    job_code = next((j.job_code for j in jobs if j.id == job_id and j.user_id == current_user.id), None) if job_id else None
+    uploads = (
+        db.query(Candidate)
+        .filter(Candidate.client_id == current_user.client_id)
+        .order_by(Candidate.updated_at.desc())
+        .all()
+    )
 
     q = db.query(ScreenedProfile).filter(ScreenedProfile.client_id == current_user.client_id)
     if job_code:
@@ -732,20 +819,16 @@ def list_candidates(
     results: list[CandidateOut] = []
     for row in rows:
         data = screened_to_candidate_dict(row, title_map.get(row.job_code or ""))
-        data = _enrich_screened_out(data, row)
+        # The list doesn't need a signed resume link; the details endpoint mints one when a candidate is opened.
+        data["resume_url"] = None
         if status_filter and status_filter.lower() != "all":
             if (data.get("status") or "").lower() != status_filter.lower():
                 continue
-        # Attach local job_id when job_code matches
-        job = (
-            db.query(Job)
-            .filter(Job.client_id == current_user.client_id, Job.job_code == row.job_code)
-            .first()
-        )
+        job = jobs_by_code.get(row.job_code or "")
         if job:
             data["job_id"] = job.id
             data["job"] = job.title
-        data = _merge_stored_profile_details(db, data, current_user.client_id)
+        data = _merge_stored_profile_details(db, data, current_user.client_id, uploads)
         results.append(_candidate_out_from_dict(data))
 
     # Include pending upload placeholders not yet written to Screened profile
@@ -755,8 +838,9 @@ def list_candidates(
     )
     if job_id:
         pending_q = pending_q.filter(Candidate.job_id == job_id)
+    jobs_by_id = {j.id: j for j in jobs}
     for c in pending_q.order_by(Candidate.created_at.desc()).all():
-        job = db.get(Job, c.job_id)
+        job = jobs_by_id.get(c.job_id)
         results.append(_candidate_out_legacy(c, job.title if job else None))
 
     return results
@@ -864,7 +948,7 @@ def update_candidate_workflow(
     db: Session = Depends(get_db),
 ):
     eval_value = payload.humanEvaluation or payload.human_evaluation
-    note_value = payload.humanNote or payload.human_note
+    note_value = payload.humanNote if payload.humanNote is not None else payload.human_note
 
     row = (
         db.query(ScreenedProfile)
@@ -877,19 +961,17 @@ def update_candidate_workflow(
     if row:
         if eval_value is not None:
             row.human_evaluation = eval_value
-        # Live Screened profile table has no "Projected availability" column.
-        if note_value is not None:
-            existing = row.summary or ""
-            marker = "\n\n[Human note]\n"
-            if marker in existing:
-                existing = existing.split(marker, 1)[0]
-            row.summary = f"{existing.rstrip()}{marker}{note_value}".strip()
-        if payload.availability is not None:
-            existing = row.summary or ""
-            marker = "\n\n[Availability]\n"
-            if marker in existing:
-                existing = existing.split(marker, 1)[0]
-            row.summary = f"{existing.rstrip()}{marker}{payload.availability}".strip()
+        # Live Screened profile table has no note / availability column, so both ride along in the summary.
+        if note_value is not None or payload.availability is not None:
+            base, cur_note, cur_avail = split_summary_markers(row.summary)
+            note = cur_note if note_value is None else note_value.strip()
+            avail = cur_avail if payload.availability is None else payload.availability.strip()
+            parts = [(base or "").rstrip()]
+            if note:
+                parts.append(f"[Human note]\n{note}")
+            if avail:
+                parts.append(f"[Availability]\n{avail}")
+            row.summary = "\n\n".join(x for x in parts if x).strip()
         db.commit()
         invalidate_client(current_user.client_id)
         db.refresh(row)

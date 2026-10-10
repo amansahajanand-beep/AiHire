@@ -11,6 +11,7 @@ import {
   Pencil,
   PauseCircle,
   Trash2,
+  Download,
 } from 'lucide-react';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
@@ -20,6 +21,7 @@ import SearchInput from '../components/ui/SearchInput';
 import FilterDropdown from '../components/ui/FilterDropdown';
 import useJobs from '../hooks/useJobs';
 import { getStatusColor, formatDate, getScoreColor } from '../utils/helpers';
+import { downloadCsv } from '../utils/csv';
 
 const tabs = ['All Jobs', 'Published', 'Draft', 'Closed', 'On Hold'];
 
@@ -203,6 +205,21 @@ export default function Jobs() {
     navigate(`/jobs/create?edit=${encodeURIComponent(job.id)}`);
   };
 
+  // Exports exactly what the table shows (current tab + search)
+  const handleDownloadCsv = () => {
+    const header = ['Job ID', 'Job Title', 'Location', 'Candidates', 'Avg Match Score', 'Status', 'Created On'];
+    const rows = displayJobs.map((job) => [
+      job.jobCode || '',
+      job.title,
+      job.location || '',
+      job.candidates,
+      job.avgScore > 0 ? `${job.avgScore}%` : '',
+      job.status,
+      formatDate(job.createdOn),
+    ]);
+    downloadCsv([header, ...rows], 'jobs.csv');
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -211,6 +228,15 @@ export default function Jobs() {
           <p className="text-slate-500 mt-1">Manage and view all your job postings.</p>
         </div>
         <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleDownloadCsv}
+            disabled={displayJobs.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm disabled:opacity-50"
+          >
+            <Download className="w-4 h-4 text-slate-400" />
+            Download CSV
+          </button>
           <button
             onClick={() => navigate('/jobs/create')}
             className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"
