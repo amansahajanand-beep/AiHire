@@ -1,11 +1,22 @@
-import { useState } from 'react';
-import { Bell, ChevronDown, Menu, Search } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ChevronDown, Menu } from 'lucide-react';
+import NotificationBell from './NotificationBell';
+import GlobalSearch from './GlobalSearch';
+import useClickOutside from '../../hooks/useClickOutside';
 import { getStoredUser } from '../../api/config';
-import { getInitials } from '../../utils/helpers';
+import Avatar from '../ui/Avatar';
 
 export default function TopNavbar({ onMenuClick }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const user = getStoredUser() || { name: 'User', email: '', role: 'Admin' };
+  const menuRef = useRef(null);
+  useClickOutside(menuRef, () => setDropdownOpen(false), dropdownOpen);
+  const [storedUser, setStoredUser] = useState(getStoredUser);
+  useEffect(() => {
+    const sync = () => setStoredUser(getStoredUser());
+    window.addEventListener('hireai:user-updated', sync);
+    return () => window.removeEventListener('hireai:user-updated', sync);
+  }, []);
+  const user = storedUser || { name: 'User', email: '', role: 'Admin' };
   const displayName = user.name || 'User';
   const role = user.role || 'Admin';
 
@@ -15,31 +26,19 @@ export default function TopNavbar({ onMenuClick }) {
         <Menu className="w-5 h-5" />
       </button>
 
-      <div className="flex-1 flex justify-center">
-        <div className="relative w-full max-w-xl hidden sm:block">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search anything..."
-            className="w-full pl-10 pr-4 py-2.5 text-sm border border-slate-200 rounded-full bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
-          />
-        </div>
+      <div className="flex-1 min-w-0 flex justify-center">
+        <GlobalSearch />
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-        <button className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors">
-          <Bell className="w-5 h-5" />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-600 rounded-full ring-2 ring-white" />
-        </button>
+        <NotificationBell />
 
-        <div className="relative">
+        <div className="relative" ref={menuRef}>
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
             className="flex items-center gap-2.5 pl-1 pr-2 py-1 hover:bg-slate-100 rounded-full transition-colors"
           >
-            <div className="w-9 h-9 bg-indigo-600 rounded-full flex items-center justify-center">
-              <span className="text-xs font-semibold text-white">{getInitials(displayName)}</span>
-            </div>
+            <Avatar name={displayName} src={user.avatar} />
             <div className="hidden sm:block text-left">
               <p className="text-sm font-semibold text-slate-800 leading-tight">{displayName}</p>
               <p className="text-xs text-slate-400">{role}</p>
@@ -49,7 +48,6 @@ export default function TopNavbar({ onMenuClick }) {
 
           {dropdownOpen && (
             <>
-              <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)} />
               <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-xl border border-slate-200 shadow-lg py-1 z-50">
                 <div className="px-4 py-2.5 border-b border-slate-100">
                   <p className="text-sm font-medium text-slate-700">{displayName}</p>

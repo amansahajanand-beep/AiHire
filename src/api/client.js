@@ -62,6 +62,15 @@ export async function apiPostJson(path, body = {}) {
   return parseResponse(res);
 }
 
+export async function apiPutJson(path, body = {}) {
+  const res = await fetch(`${apiConfig.baseUrl}${path}`, {
+    method: 'PUT',
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
+    body: JSON.stringify(body),
+  });
+  return parseResponse(res);
+}
+
 export async function apiPatchJson(path, body = {}) {
   const res = await fetch(`${apiConfig.baseUrl}${path}`, {
     method: 'PATCH',

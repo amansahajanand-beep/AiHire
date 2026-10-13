@@ -26,6 +26,8 @@ def _ensure_candidate_storage_columns() -> None:
         'ALTER TABLE "Screened profile_Multitenent Profile screening" ADD COLUMN IF NOT EXISTS human_evaluation TEXT',
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS city VARCHAR(120)",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS country VARCHAR(120)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(20)",
+        "ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan VARCHAR(60) NOT NULL DEFAULT 'Pro'",
         "ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_status VARCHAR(30) NOT NULL DEFAULT 'Active'",
     ]

@@ -164,14 +164,16 @@ export default function Candidates() {
 
       <Card padding={false}>
         <div className="p-4 border-b border-slate-100">
-          <div className="flex flex-col lg:flex-row gap-3">
+          <div className="flex flex-col gap-3">
             <SearchInput
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search by keywords (skills, experience, name etc)"
-              className="flex-1"
+              className="w-full"
             />
-            <div className="flex flex-wrap gap-3">
+            <div className={`grid grid-cols-1 sm:grid-cols-2 items-end gap-3 ${
+              dateFilter === 'custom' ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-4'
+            }`}>
               <FilterDropdown value={jobFilter} options={jobFilterOptions} onChange={(v) => { setJobFilter(v); setPage(1); }} />
               <FilterDropdown value={statusFilter} options={statusOptions} onChange={(v) => { setStatusFilter(v); setPage(1); }} />
               <FilterDropdown
@@ -184,24 +186,24 @@ export default function Candidates() {
               />
               {dateFilter === 'custom' && (
                 <>
-                  <label className="flex items-center gap-2 text-sm text-slate-500">
+                  <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
                     From Date
                     <input
                       type="date"
                       value={fromDate}
                       max={toDate || undefined}
                       onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
-                      className="px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      className="w-full px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-slate-500">
+                  <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
                     To Date
                     <input
                       type="date"
                       value={toDate}
                       min={fromDate || undefined}
                       onChange={(e) => { setToDate(e.target.value); setPage(1); }}
-                      className="px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      className="w-full px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     />
                   </label>
                 </>

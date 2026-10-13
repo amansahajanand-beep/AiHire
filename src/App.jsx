@@ -18,6 +18,8 @@ import AIAnalysisProgress from './pages/AIAnalysisProgress';
 import AutomationSolutions from './pages/AutomationSolutions';
 import HiringActivity from './pages/HiringActivity';
 import Settings from './pages/Settings';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 // Temporarily disabled: set to true to bring the /pricing page back (the Pricing page code is untouched).
 const PRICING_ENABLED = false;
@@ -34,6 +36,9 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Route>
+
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>

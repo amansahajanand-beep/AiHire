@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     cache_ttl_signed_url: int = 3600
     redis_key_prefix: str = "aihire:"
 
+    # Where the React app is served; used to build links in emails (and checkout returns).
+    frontend_url: str = "http://localhost:5173"
+    # Outgoing email (password reset). Leave SMTP_HOST empty in dev: the reset link is logged instead.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    password_reset_expire_minutes: int = 30
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

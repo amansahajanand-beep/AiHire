@@ -12,7 +12,11 @@ export function getToken() {
 
 export function setAuthSession({ access_token, user }) {
   if (access_token) localStorage.setItem('hireai_token', access_token);
-  if (user) localStorage.setItem('hireai_user', JSON.stringify(user));
+  if (user) {
+    localStorage.setItem('hireai_user', JSON.stringify(user));
+    // Lets already-mounted UI (e.g. the header avatar) pick up the change.
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('hireai:user-updated'));
+  }
 }
 
 export function clearAuthSession() {

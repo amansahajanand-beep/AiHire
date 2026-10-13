@@ -23,6 +23,8 @@ class User(Base):
     company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(120), nullable=True)
     country: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    avatar: Mapped[str | None] = mapped_column(Text, nullable=True)  # small resized image as a data URL
     plan: Mapped[str] = mapped_column(String(60), default="Pro", server_default="Pro")
     plan_status: Mapped[str] = mapped_column(String(30), default="Active", server_default="Active")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

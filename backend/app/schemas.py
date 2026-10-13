@@ -31,6 +31,43 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    password: str = Field(min_length=6, max_length=128)
+    confirmPassword: str | None = None
+
+    @model_validator(mode="after")
+    def passwords_match(self):
+        if self.confirmPassword is not None and self.confirmPassword != self.password:
+            raise ValueError("Passwords do not match")
+        return self
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    password: str = Field(min_length=6, max_length=128)
+    confirmPassword: str | None = None
+
+    @model_validator(mode="after")
+    def passwords_match(self):
+        if self.confirmPassword is not None and self.confirmPassword != self.password:
+            raise ValueError("Passwords do not match")
+        return self
+
+
+class ProfileUpdateRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    phone: str | None = Field(default=None, max_length=30)
+
+
+class AvatarUpdateRequest(BaseModel):
+    image: str = Field(max_length=400_000)  # data URL, resized client-side
+
+
 class UserOut(BaseModel):
     id: str
     client_id: str
@@ -39,6 +76,8 @@ class UserOut(BaseModel):
     company: str | None = None
     city: str | None = None
     country: str | None = None
+    phone: str | None = None
+    avatar: str | None = None
     plan: str = "Pro"
     plan_status: str = "Active"
     created_at: datetime

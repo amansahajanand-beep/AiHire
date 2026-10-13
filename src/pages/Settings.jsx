@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { User, Building2, Users, Bell, Plug, CreditCard } from 'lucide-react';
 import Card from '../components/ui/Card';
-import { getStoredUser } from '../api/config';
-import { fetchMe } from '../api/auth';
-import { getInitials } from '../utils/helpers';
+import { getStoredUser, setAuthSession } from '../api/config';
+import { fetchMe, updateProfile, setAvatar, removeAvatar } from '../api/auth';
+import { getInitials, resizeImageToDataUrl } from '../utils/helpers';
+import Avatar from '../components/ui/Avatar';
+import ChangePasswordCard from '../components/auth/ChangePasswordCard';
 
 const settingsNav = [
   { id: 'profile', label: 'Profile Settings', icon: User },
@@ -20,20 +22,99 @@ export default function Settings() {
   const [profile, setProfile] = useState({
     name: storedUser?.name || '',
     email: storedUser?.email || '',
-    phone: '',
+    phone: storedUser?.phone || '',
   });
+  const [editingName, setEditingName] = useState(false);
+  const [editingPhone, setEditingPhone] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const fileInputRef = useRef(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState('');
   const [companyName, setCompanyName] = useState(storedUser?.company || '');
   const [saved, setSaved] = useState(false);
   const [account, setAccount] = useState(storedUser);
 
   useEffect(() => {
-    fetchMe().then(setAccount).catch(() => {});
+    fetchMe()
+      .then((u) => {
+        setAccount(u);
+        setProfile((p) => ({ ...p, name: u.name || p.name, phone: u.phone || '' }));
+        setAuthSession({ user: u });
+      })
+      .catch(() => {});
   }, []);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const savedName = account?.name || '';
+  const savedPhone = account?.phone || '';
+  // No phone on file: the field is open for entry. With one on file it's locked until "Edit".
+  const phoneEditable = !savedPhone || editingPhone;
+  const nameChanged = editingName && profile.name.trim() !== savedName;
+  const phoneChanged = phoneEditable && profile.phone.trim() !== savedPhone;
+  const dirty = nameChanged || phoneChanged;
+
+  const handleCancel = () => {
+    setProfile((p) => ({ ...p, name: savedName, phone: savedPhone }));
+    setEditingName(false);
+    setEditingPhone(false);
+    setSaveError('');
   };
+
+  const handleSave = async () => {
+    setSaveError('');
+    if (nameChanged && profile.name.trim().length < 2) {
+      setSaveError('Name must be at least 2 characters');
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {};
+      if (nameChanged) payload.name = profile.name.trim();
+      if (phoneChanged) payload.phone = profile.phone.trim();
+      const user = await updateProfile(payload);
+      setAccount(user);
+      setProfile((p) => ({ ...p, name: user.name, phone: user.phone || '' }));
+      setEditingName(false);
+      setEditingPhone(false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      setSaveError(err.message || 'Could not save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePhotoPick = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow picking the same file again
+    if (!file) return;
+    setPhotoError('');
+    setPhotoBusy(true);
+    try {
+      const image = await resizeImageToDataUrl(file);
+      setAccount(await setAvatar(image));
+    } catch (err) {
+      setPhotoError(err.message || 'Could not update your picture');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handlePhotoRemove = async () => {
+    setPhotoError('');
+    setPhotoBusy(true);
+    try {
+      setAccount(await removeAvatar());
+    } catch (err) {
+      setPhotoError(err.message || 'Could not remove your picture');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const lockedClass = 'disabled:bg-slate-50 disabled:text-slate-500 disabled:cursor-not-allowed';
+  const editLink = 'text-xs font-semibold text-indigo-600 hover:text-indigo-700';
 
   const inputClass = 'w-full px-4 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
 
@@ -71,37 +152,107 @@ export default function Settings() {
 
               <div className="space-y-5 max-w-lg">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Full Name</label>
-                  <input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} className={inputClass} />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-semibold text-slate-700">Full Name</label>
+                    {!editingName && (
+                      <button type="button" onClick={() => setEditingName(true)} className={editLink}>Edit</button>
+                    )}
+                  </div>
+                  <input
+                    value={profile.name}
+                    disabled={!editingName}
+                    onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                    className={`${inputClass} ${lockedClass}`}
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">Work Email</label>
-                  <input value={profile.email} onChange={(e) => setProfile({ ...profile, email: e.target.value })} className={inputClass} />
+                  <input value={profile.email} disabled readOnly className={`${inputClass} ${lockedClass}`} />
+                  <p className="text-xs text-slate-400 mt-1">Your email is your login and can&apos;t be changed.</p>
                 </div>
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">Phone Number</label>
-                  <input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} className={inputClass} />
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-semibold text-slate-700">Phone Number</label>
+                    {savedPhone && !editingPhone && (
+                      <button type="button" onClick={() => setEditingPhone(true)} className={editLink}>Edit</button>
+                    )}
+                  </div>
+                  <input
+                    type="tel"
+                    value={profile.phone}
+                    disabled={!phoneEditable}
+                    placeholder="e.g. 9876543210"
+                    onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
+                    className={`${inputClass} ${lockedClass}`}
+                  />
+                  {!savedPhone && (
+                    <p className="text-xs text-amber-600 mt-1">Please add your phone number.</p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-2">Profile Picture</label>
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-indigo-100 rounded-full flex items-center justify-center">
-                      <span className="text-sm font-bold text-indigo-700">{getInitials(profile.name)}</span>
+                  <div className="flex flex-wrap items-center gap-4">
+                    <Avatar
+                      name={account?.name || profile.name}
+                      src={account?.avatar}
+                      size="w-16 h-16"
+                      textClass="text-base"
+                      tone="bg-indigo-100 text-indigo-700"
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={handlePhotoPick}
+                      className="hidden"
+                    />
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={photoBusy}
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-4 py-2 text-sm font-semibold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 disabled:opacity-60"
+                      >
+                        {photoBusy ? 'Saving...' : account?.avatar ? 'Change Photo' : 'Upload Photo'}
+                      </button>
+                      {account?.avatar && (
+                        <button
+                          type="button"
+                          disabled={photoBusy}
+                          onClick={handlePhotoRemove}
+                          className="px-4 py-2 text-sm font-semibold text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-60"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
-                    <button className="px-4 py-2 text-sm font-semibold text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50">
-                      Change Photo
-                    </button>
                   </div>
+                  {photoError && <p className="text-sm text-red-600 mt-2">{photoError}</p>}
                 </div>
-                <button
-                  onClick={handleSave}
-                  className="w-full sm:w-auto px-8 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"
-                >
-                  {saved ? 'Saved!' : 'Save Changes'}
-                </button>
+                {saveError && <p className="text-sm text-red-600">{saveError}</p>}
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <button
+                    onClick={handleSave}
+                    disabled={!dirty || saving}
+                    className="w-full sm:w-auto px-8 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-semibold"
+                  >
+                    {saving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
+                  </button>
+                  {(editingName || editingPhone || (!savedPhone && profile.phone)) && (
+                    <button
+                      type="button"
+                      onClick={handleCancel}
+                      className="w-full sm:w-auto px-6 py-2.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-semibold"
+                    >
+                      Cancel
+                    </button>
+                  )}
+                </div>
               </div>
             </Card>
           )}
+
+          {activeSection === 'profile' && <ChangePasswordCard />}
 
           {activeSection === 'company' && (
             <Card>

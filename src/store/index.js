@@ -19,6 +19,8 @@ export function invalidateHiringData(dispatch) {
   dispatch(invalidateCandidates());
   dispatch(invalidateJobs());
   dispatch(invalidateActivity());
+  // Tell the notification bell something happened so it refreshes right away.
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('hireai:activity-changed'));
 }
 
 /** Clear all cached API data (e.g. on logout). */

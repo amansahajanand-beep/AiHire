@@ -288,16 +288,20 @@ export async function downloadCandidateReportPdf(candidate) {
       if (i < items.length) newPage();
     }
   };
+  // Two side-by-side cards, kept whole (never split unevenly). If they don't fit:
+  //  - lots of room left on the page: stack them full-width and let them flow across the page break,
+  //    so there is no big blank gap;
+  //  - little room left: move the pair to the next page.
+  const MAX_GAP = 120;
   const pairCards = (left, right, wL, wR) => {
-    const hL = chunkHeight(left.items);
-    const hR = chunkHeight(right.items);
-    const h = Math.max(hL, hR);
-    if (y + h > BOTTOM && h <= BOTTOM - TOP) newPage();
-    if (h > BOTTOM - TOP) {
+    const h = Math.max(chunkHeight(left.items), chunkHeight(right.items));
+    const fitsOnFreshPage = h <= BOTTOM - TOP;
+    if (y + h > BOTTOM && (!fitsOnFreshPage || BOTTOM - y > MAX_GAP)) {
       flowCard(left.title, left.icon, left.items, left.opts);
       flowCard(right.title, right.icon, right.items, right.opts);
       return;
     }
+    if (y + h > BOTTOM) newPage();
     drawChunk(M, y, wL, left.title, left.icon, left.items, { ...left.opts, height: h });
     drawChunk(M + wL + GAP, y, wR, right.title, right.icon, right.items, { ...right.opts, height: h });
     y += h + GAP;
@@ -307,16 +311,16 @@ export async function downloadCandidateReportPdf(candidate) {
   const name = candidate.name || 'Candidate';
   const score = Math.round(Number(candidate.score) || 0);
   const human = humanReviewLabel(candidate.humanEvaluation);
-  const statusText = candidate.status || candidate.screeningStatus || '-';
-  const heroLabel = human !== 'N/A' ? human : statusText;
-  const heroColor = tone(heroLabel);
+  // The AI's own recommendation (the "Recommendation" column in the candidates table), not the human review.
+  const aiRecommendation = candidate.status || candidate.screeningStatus || 'Pending';
+  const aiColor = tone(aiRecommendation);
   const humanNote = asText(candidate.humanNote).trim().slice(0, 240) + (asText(candidate.humanNote).trim().length > 240 ? '…' : '');
 
   // ======================= PAGE 1 =======================
   drawHeader();
 
   // Hero
-  const heroH = 74;
+  const heroH = 68;
   card(M, y, CW, heroH, { fill: C.blueTint, stroke: C.blueLine, r: 14 });
   drawC(C.blueLine);
   fillC('#E3EEFF');
@@ -329,13 +333,12 @@ export async function downloadCandidateReportPdf(candidate) {
   if (nameLines[1]) txt(nameLines[1], M + 20, y + 52, { size: 24, bold: true, color: C.navy });
   const roleLine = wrap(candidate.job || '-', 12, false, CW - 190)[0];
   txt(roleLine, M + 20, y + heroH - (nameLines.length > 1 ? 6 : 14), { size: 12, color: C.slate });
-  const heroPillW = widthOf(heroLabel, 11, true) + 40;
-  pill(heroLabel, M + CW - heroPillW - 20, y + heroH / 2 - 14, { color: heroColor, h: 28, size: 11 });
   y += heroH + GAP;
 
   // Candidate information + Match score
   const infoRows = [
     ['person', 'Applied for', candidate.job || '-', null],
+    ['person', 'Recommendation', aiRecommendation, aiColor],
     ['person', 'Human review', human, human === 'N/A' ? null : tone(human)],
     ...(humanNote ? [['note', 'Note', humanNote, null]] : []),
     ['calendar', 'Screened on', candidate.screenedOn ? formatDate(candidate.screenedOn) : '-', null],
@@ -348,10 +351,10 @@ export async function downloadCandidateReportPdf(candidate) {
   const scoreW = CW - infoW - GAP;
   const valueW = infoW - PAD * 2 - 100;
   const rowHs = infoRows.map(([, , value, pillColor]) => {
-    if (pillColor) return 22;
-    return Math.max(22, wrap(value, 9.5, true, valueW).length * 12 + 10);
+    if (pillColor) return 19;
+    return Math.max(19, wrap(value, 9.5, true, valueW).length * 12 + 7);
   });
-  const infoH = Math.max(HEAD + PAD + rowHs.reduce((a, b) => a + b, 0), 226);
+  const infoH = Math.max(HEAD + PAD + rowHs.reduce((a, b) => a + b, 0), 216);
   ensure(infoH);
   card(M, y, infoW, infoH);
   badge('person', M + PAD + 9, y + 22, C.blue, 20);
@@ -407,15 +410,13 @@ export async function downloadCandidateReportPdf(candidate) {
   txt(scoreStr, startX, rcy + 6, { size: 34, bold: true, color: C.navy });
   txt('/ 100', startX + numW + 6, rcy + 6, { size: 12, color: C.slate });
   txt('Match Score', rcx, rcy + 24, { size: 9, color: C.slate, align: 'center' });
-  const pillLabel = heroLabel;
-  const pw = widthOf(pillLabel, 10, true) + 36;
-  pill(pillLabel, rcx - pw / 2, rcy + radius + 12, { color: heroColor, h: 22, size: 10 });
+  pill(aiRecommendation, rcx - (widthOf(aiRecommendation, 10, true) + 30) / 2, rcy + radius + 12, { color: aiColor, h: 22, size: 10 });
   txt(matchLabel(score), rcx, y + infoH - 11, { size: 9, color: C.slate, align: 'center' });
   y += infoH + GAP;
 
   // AI match breakdown
   const breakdown = weightedEntries(candidate.breakdown);
-  const bdRowH = 26;
+  const bdRowH = 23;
   const bdH = HEAD + 20 + Math.max(breakdown.length, 1) * bdRowH + 8;
   ensure(bdH);
   card(M, y, CW, bdH);
@@ -462,7 +463,7 @@ export async function downloadCandidateReportPdf(candidate) {
   const colW = (CW - GAP) / 2;
   const listItems = (items, color, icon) => items.flatMap((text) => {
     const lines = wrap(text, 9, false, colW - PAD * 2 - 22);
-    const h = lines.length * 12 + 8;
+    const h = lines.length * 12 + 6;
     return [{
       h,
       draw: (x, iy) => {
@@ -492,8 +493,8 @@ export async function downloadCandidateReportPdf(candidate) {
     colW,
   );
 
-  // ======================= PAGE 2 =======================
-  newPage();
+  // ======================= REST OF THE REPORT =======================
+  // Flows straight on from page 1; cards split across pages instead of leaving blank space.
 
   // AI Summary + Growth
   const summary = candidate.summary || candidate.remarks || '';
