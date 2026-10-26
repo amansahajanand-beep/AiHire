@@ -55,7 +55,7 @@ export default function StatCard({
     const { num, unit } = splitValue(hero.value);
     return (
       <div
-        className="relative overflow-hidden rounded-2xl text-white px-5 py-4 h-full flex flex-col shadow-[0_10px_30px_-12px_rgba(31,20,80,0.6)]"
+        className="relative overflow-hidden rounded-2xl text-white px-5 py-3.5 h-full flex flex-col shadow-[0_10px_30px_-12px_rgba(31,20,80,0.6)]"
         style={{ background: 'linear-gradient(155deg, #1B1442 0%, #2B1B70 55%, #3B2796 100%)' }}
       >
         <div className="pointer-events-none absolute -right-10 top-8 w-64 h-64 rounded-full opacity-60" style={{ background: 'radial-gradient(circle, rgba(129,104,238,0.55) 0%, rgba(129,104,238,0) 65%)' }} />
@@ -71,15 +71,15 @@ export default function StatCard({
           </span>
         </div>
 
-        <div className="relative mt-4 mb-4">
+        <div className="relative mt-3 mb-3">
           <p className="leading-none">
-            <span className="text-[40px] font-bold tracking-tight tabular-nums">{num}</span>
+            <span className="text-[36px] font-bold tracking-tight tabular-nums">{num}</span>
             {unit && <span className="text-lg font-medium text-white/70 ml-1">{unit}</span>}
           </p>
           <p className="text-xs text-white/65 mt-2">{hero.label}</p>
         </div>
 
-        <div className="relative mt-auto pt-4 border-t border-white/15 grid grid-cols-2 gap-4">
+        <div className="relative mt-auto pt-3 border-t border-white/15 grid grid-cols-2 gap-4">
           {rest.map((m) => {
             const parts = splitValue(m.value);
             return (
@@ -99,7 +99,7 @@ export default function StatCard({
 
   const { num, unit } = splitValue(value);
   return (
-    <div className="p-5 min-w-0 flex flex-col border-slate-200/70 border-b lg:border-b-0 border-r [&:nth-child(2n)]:border-r-0 lg:[&:nth-child(2n)]:border-r lg:last:border-r-0 last:border-b-0">
+    <div className="px-5 pt-5 pb-6 min-w-0 flex flex-col border-slate-200/70 border-b lg:border-b-0 border-r [&:nth-child(2n)]:border-r-0 lg:[&:nth-child(2n)]:border-r lg:last:border-r-0 last:border-b-0">
       <div className="flex items-start gap-2.5 min-h-[34px]">
         <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${tones[icon] || tones.FileText}`}>
           <Icon className="w-[15px] h-[15px]" strokeWidth={1.9} />
@@ -131,7 +131,7 @@ export default function StatCard({
           ))}
         </div>
       )}
-      {caption ? <p className="text-xs text-slate-500 mt-2.5">{caption}</p> : null}
+      {caption ? <p className="text-xs text-slate-500 mt-3">{caption}</p> : null}
       {detail ? <p className="text-xs text-slate-500 mt-1">{detail}</p> : null}
     </div>
   );

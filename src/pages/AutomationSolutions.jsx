@@ -19,15 +19,17 @@ const CHAIN_LABEL = {
   'AI Interview Question Generator': 'Interview Questions',
 };
 
+// Agents that are not available yet (status 'Coming Soon') are not shown on this page.
+const agents = automationAgents.filter((a) => a.status !== 'Coming Soon');
+
 export default function AutomationSolutions() {
-  const [statuses, setStatuses] = useState(() => Object.fromEntries(automationAgents.map((a) => [a.id, a.status])));
+  const [statuses, setStatuses] = useState(() => Object.fromEntries(agents.map((a) => [a.id, a.status])));
   const setStatus = (id, status) => setStatuses((prev) => ({ ...prev, [id]: status }));
 
-  const count = (s) => automationAgents.filter((a) => statuses[a.id] === s).length;
+  const count = (s) => agents.filter((a) => statuses[a.id] === s).length;
   const counts = [
     { label: 'active', n: count('Active'), dot: 'bg-emerald-500' },
     { label: 'available', n: count('Available'), dot: 'bg-slate-400' },
-    { label: 'coming soon', n: count('Coming Soon'), dot: 'border border-slate-400' },
   ];
 
   const chain = CHAIN.map((name) => automationAgents.find((a) => a.name === name)).filter(Boolean);
@@ -98,7 +100,7 @@ export default function AutomationSolutions() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {automationAgents.map((agent) => (
+        {agents.map((agent) => (
           <AutomationAgentCard
             key={agent.id}
             agent={agent}

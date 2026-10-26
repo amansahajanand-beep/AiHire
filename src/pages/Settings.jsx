@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CircleUser, Building2, Users, Bell, Plug, CreditCard, Camera, Mail, Hash, Briefcase, LayoutGrid, Plus, Check } from 'lucide-react';
+import { CircleUser, Building2, Users, Bell, Plug, CreditCard, Camera, Mail, Hash, Briefcase, LayoutGrid, Plus, Check, FileText } from 'lucide-react';
 import { getStoredUser, setAuthSession } from '../api/config';
 import { fetchMe, updateProfile, setAvatar, removeAvatar } from '../api/auth';
 import { getInitials, resizeImageToDataUrl } from '../utils/helpers';
@@ -17,6 +17,23 @@ const settingsNav = [
   { id: 'integrations', label: 'Integrations', hint: 'Connected tools', icon: Plug, group: 'WORKSPACE' },
   { id: 'billing', label: 'Billing & Plan', hint: 'Plan, usage, invoices', icon: CreditCard, group: 'WORKSPACE' },
 ];
+
+const NOTIFICATION_ITEMS = [
+  { id: 'screened', label: 'New candidate screened', enabled: true },
+  { id: 'shortlisted', label: 'Candidate shortlisted', enabled: true },
+  { id: 'published', label: 'Job published', enabled: false },
+  { id: 'weekly', label: 'Weekly hiring report', enabled: true },
+];
+const NOTIFICATION_KEY = 'hireai_notification_prefs';
+
+function loadNotificationPrefs() {
+  const defaults = Object.fromEntries(NOTIFICATION_ITEMS.map((i) => [i.id, i.enabled]));
+  try {
+    return { ...defaults, ...JSON.parse(localStorage.getItem(NOTIFICATION_KEY) || '{}') };
+  } catch {
+    return defaults;
+  }
+}
 
 const panelClass = 'rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(18,18,28,0.04)] overflow-hidden';
 
@@ -62,6 +79,7 @@ export default function Settings() {
   const [photoError, setPhotoError] = useState('');
   const [companyName, setCompanyName] = useState(storedUser?.company || '');
   const [saved, setSaved] = useState(false);
+  const [notifications, setNotifications] = useState(loadNotificationPrefs);
   const [account, setAccount] = useState(storedUser);
   const dispatch = useAppDispatch();
   const totals = useAppSelector((st) => st.dashboard.totals);
@@ -90,6 +108,18 @@ export default function Settings() {
   const nameChanged = editingName && profile.name.trim() !== savedName;
   const phoneChanged = phoneEditable && profile.phone.trim() !== savedPhone;
   const dirty = nameChanged || phoneChanged;
+
+  const toggleNotification = (id) => {
+    setNotifications((prev) => {
+      const next = { ...prev, [id]: !prev[id] };
+      try {
+        localStorage.setItem(NOTIFICATION_KEY, JSON.stringify(next));
+      } catch {
+        // storage unavailable: the switch still works for this visit
+      }
+      return next;
+    });
+  };
 
   const handleCancel = () => {
     setProfile((p) => ({ ...p, name: savedName, phone: savedPhone }));
@@ -380,19 +410,24 @@ export default function Settings() {
 
           {activeSection === 'notifications' && (
             <Panel title="Notification Settings" subtitle="Choose what you hear about.">
-              {[
-                { label: 'New candidate screened', enabled: true },
-                { label: 'Candidate shortlisted', enabled: true },
-                { label: 'Job published', enabled: false },
-                { label: 'Weekly hiring report', enabled: true },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between px-6 py-4 border-b border-slate-100 last:border-b-0">
-                  <p className="text-[13px] font-medium text-slate-800">{item.label}</p>
-                  <button className={`w-10 h-6 rounded-full transition-colors ${item.enabled ? 'bg-indigo-600' : 'bg-slate-200'} relative`}>
-                    <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${item.enabled ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                  </button>
-                </div>
-              ))}
+              {NOTIFICATION_ITEMS.map((item) => {
+                const on = notifications[item.id];
+                return (
+                  <div key={item.id} className="flex items-center justify-between px-6 py-4 border-b border-slate-100 last:border-b-0">
+                    <p className="text-[13px] font-medium text-slate-800">{item.label}</p>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={on}
+                      aria-label={item.label}
+                      onClick={() => toggleNotification(item.id)}
+                      className={`relative w-10 h-6 shrink-0 rounded-full transition-colors ${on ? 'bg-indigo-600' : 'bg-slate-200'}`}
+                    >
+                      <span className={`absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${on ? 'translate-x-4' : 'translate-x-0'}`} />
+                    </button>
+                  </div>
+                );
+              })}
             </Panel>
           )}
 
@@ -458,27 +493,35 @@ export default function Settings() {
                 </div>
               </section>
 
-              <section className={panelClass}>
-                <div className="p-6">
-                  <h2 className="text-[14px] font-semibold tracking-tight text-slate-900">Usage</h2>
-                  <p className="text-[11px] text-slate-500 mt-1">Totals to date against your plan limits.</p>
-                  <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-x-8 gap-y-5">
-                    {[
-                      { label: 'Resumes screened', used: totals?.candidatesScreened ?? 0, limit: 500 },
-                      { label: 'Active jobs', used: (jobs || []).filter((j) => j.status === 'Published').length, limit: 25 },
-                      { label: 'Team seats', used: storedUser ? 1 : 0, limit: 5 },
-                    ].map(({ label, used, limit }) => (
-                      <div key={label}>
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-600">{label}</span>
-                          <span className="font-mono text-[11px] text-slate-900">{used} / {limit}</span>
+              <section>
+                <h2 className="text-[14px] font-semibold tracking-tight text-slate-900">Usage</h2>
+                <p className="text-[11px] text-slate-500 mt-1">Totals to date against your plan limits.</p>
+                <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  {[
+                    { label: 'Resumes screened', icon: FileText, used: totals?.candidatesScreened ?? 0, limit: 500 },
+                    { label: 'Active jobs', icon: Briefcase, used: (jobs || []).filter((j) => j.status === 'Published').length, limit: 25 },
+                    { label: 'Team seats', icon: Users, used: storedUser ? 1 : 0, limit: 5 },
+                  ].map(({ label, icon: Icon, used, limit }) => {
+                    const pct = Math.min(100, (used / limit) * 100);
+                    return (
+                      <div key={label} className={`${panelClass} p-5`}>
+                        <div className="flex items-center gap-2.5">
+                          <span className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                            <Icon className="w-3.5 h-3.5 text-indigo-600" strokeWidth={1.8} />
+                          </span>
+                          <span className="text-xs font-medium text-slate-600">{label}</span>
                         </div>
-                        <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                          <div className="h-full rounded-full bg-indigo-600" style={{ width: `${Math.min(100, (used / limit) * 100)}%` }} />
+                        <p className="mt-4 flex items-baseline gap-1.5">
+                          <span className="text-[28px] font-bold tracking-tight tabular-nums text-slate-900 leading-none">{used}</span>
+                          <span className="text-xs text-slate-500">of {limit}</span>
+                        </p>
+                        <div className="mt-4 h-2 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${pct}%` }} />
                         </div>
+                        <p className="mt-2 font-mono text-[10.5px] text-slate-500">{Math.round(pct)}% used</p>
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
               </section>
             </>

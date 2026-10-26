@@ -35,7 +35,9 @@ export default function Login() {
       {/* Left: logo, centred form, footer */}
       <div className="relative flex flex-col min-h-[640px] lg:min-h-screen">
         <div className="px-6 sm:px-8 pt-6">
-          <img src={logo} alt="HireScop" className="h-10 w-auto max-w-[190px] object-contain object-left" />
+          <Link to="/" aria-label="HireScop home" className="inline-flex">
+            <img src={logo} alt="HireScop" className="h-10 w-auto max-w-[190px] object-contain object-left" />
+          </Link>
         </div>
 
         <div className="flex-1 flex items-center justify-center px-6 py-10">
@@ -131,7 +133,7 @@ export default function Login() {
             <span className="inline-flex items-center gap-1.5 px-3 h-7 rounded-full bg-white border border-indigo-100 text-[11px] font-medium text-indigo-700 shadow-sm">
               <Sparkles className="w-3 h-3" /> AI Resume Screening
             </span>
-            <h2 className="mt-5 text-[30px] font-bold tracking-tight text-slate-900 leading-tight">Hire smarter with AI</h2>
+            <h2 className="mt-5 text-[30px] font-bold tracking-tight text-slate-900 leading-tight">Smart hiring with HireScop</h2>
             <p className="mt-3 text-[13px] text-slate-600 leading-relaxed max-w-[360px]">
               Our AI analyzes resumes, matches candidates with jobs, and helps you build the best team.
             </p>

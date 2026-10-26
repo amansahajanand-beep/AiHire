@@ -252,7 +252,7 @@ function Agents() {
   const bars = [
     ['Skills match', 86],
     ['Experience', 74],
-    ['Responsibilities', 79],
+    ['Stability', 79],
     ['Qualifications', 70],
   ];
   const agents = [
@@ -542,7 +542,7 @@ function FinalCta() {
             'radial-gradient(ellipse 420px 200px at 50% 0, rgba(129,104,238,0.55), transparent 70%), radial-gradient(ellipse 260px 160px at 100% 100%, rgba(59,91,219,0.45), transparent 70%), #170F3A',
         }}
       >
-        <h2 className="text-[34px] sm:text-[40px] font-bold tracking-[-0.03em] leading-none">Hire smarter with AI.</h2>
+        <h2 className="text-[34px] sm:text-[40px] font-bold tracking-[-0.03em] leading-none">Smart hiring with HireScop.</h2>
         <p className="mx-auto mt-4 max-w-[390px] text-[12.5px] leading-relaxed text-indigo-200">
           Create a job, upload resumes, and see a ranked shortlist before your next meeting.
         </p>
