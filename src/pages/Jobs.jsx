@@ -12,15 +12,23 @@ import {
   PauseCircle,
   Trash2,
   Download,
+  Code2,
+  Briefcase,
+  Building2,
+  Clock3,
+  CalendarDays,
+  MapPin,
+  FileText,
+  ArrowRight,
 } from 'lucide-react';
-import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Button from '../components/ui/Button';
 import LoadingState from '../components/ui/LoadingState';
 import SearchInput from '../components/ui/SearchInput';
 import FilterDropdown from '../components/ui/FilterDropdown';
 import useJobs from '../hooks/useJobs';
-import { getStatusColor, formatDate, getScoreColor } from '../utils/helpers';
+import { useAppSelector } from '../store/hooks';
+import { getStatusColor, formatDate } from '../utils/helpers';
 import { downloadCsv } from '../utils/csv';
 
 const tabs = ['All Jobs', 'Published', 'Draft', 'Closed', 'On Hold'];
@@ -66,6 +74,7 @@ export default function Jobs() {
   const navigate = useNavigate();
   const location = useLocation();
   const { jobs, loading, error, updateJob, removeJob } = useJobs();
+  const candidates = useAppSelector((s) => s.candidates.lists['all::all']?.items);
   const [activeTab, setActiveTab] = useState('All Jobs');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState('newest');
@@ -100,6 +109,18 @@ export default function Jobs() {
     });
   }, [jobs, activeTab, search, sortBy]);
   const menuJob = menu ? jobs.find((j) => j.id === menu.jobId) : null;
+
+  const shortlistedByJob = useMemo(() => {
+    const counts = {};
+    (candidates || []).forEach((c) => {
+      const isShortlisted = /shortlist/i.test(String(c.status || '')) || c.humanEvaluation === 'Shortlisted';
+      if (!isShortlisted) return;
+      const job = jobs.find((j) => j.id === c.jobId || (c.job && j.title === c.job));
+      if (job) counts[job.id] = (counts[job.id] || 0) + 1;
+    });
+    return counts;
+  }, [candidates, jobs]);
+  const tabCount = (tab) => (tab === 'All Jobs' ? jobs.length : jobs.filter((j) => j.status === tab).length);
 
   useEffect(() => {
     if (!menu) return undefined;
@@ -222,133 +243,194 @@ export default function Jobs() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Jobs</h1>
-          <p className="text-slate-500 mt-1">Manage and view all your job postings.</p>
+          <h1 className="text-[28px] font-bold text-slate-900 tracking-tight leading-none">Jobs</h1>
+          <p className="text-sm text-slate-500 mt-2.5">Manage and view all your job postings.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 shrink-0">
           <button
             type="button"
             onClick={handleDownloadCsv}
             disabled={displayJobs.length === 0}
-            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-3.5 h-9 bg-white border border-slate-200 rounded-xl text-[13px] font-medium text-slate-800 hover:bg-slate-50 shadow-[0_1px_2px_rgba(18,18,28,0.04)] disabled:opacity-50"
           >
-            <Download className="w-4 h-4 text-slate-400" />
+            <Download className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.8} />
             Download CSV
           </button>
           <button
             onClick={() => navigate('/jobs/create')}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold"
+            className="inline-flex items-center gap-2 px-4 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-semibold shadow-[0_1px_2px_rgba(107,71,230,0.45),inset_0_1px_0_rgba(255,255,255,0.2)]"
           >
-            <Plus className="w-4 h-4" /> Create Job
+            <Plus className="w-3.5 h-3.5" strokeWidth={2.4} /> Create Job
           </button>
         </div>
       </div>
 
-      <Card padding={false}>
-        <div className="px-4 border-b border-slate-100 overflow-x-auto">
-          <div className="flex gap-1 min-w-max">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setActiveTab(tab)}
-                className={`px-4 py-3.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
-                  activeTab === tab
-                    ? 'border-indigo-600 text-indigo-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-700'
-                }`}
+      <div className="border-b border-slate-200/80 overflow-x-auto">
+        <div className="flex gap-1 min-w-max">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`inline-flex items-center gap-2 px-3 pb-3 pt-1 text-[13px] font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+                activeTab === tab
+                  ? 'border-indigo-600 text-slate-900'
+                  : 'border-transparent text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {tab}
+              <span className="min-w-[18px] px-1.5 py-px rounded-md bg-slate-100 text-[10.5px] font-medium text-slate-600 tabular-nums text-center">
+                {tabCount(tab)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <SearchInput
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by job title or job ID..."
+          className="flex-1"
+        />
+        <FilterDropdown value={sortBy} options={sortOptions} onChange={setSortBy} className="sm:w-56" />
+      </div>
+
+      {loading ? (
+        <LoadingState message="Loading jobs..." />
+      ) : error ? (
+        <div className="p-8 text-center text-sm text-red-600">{error.message || 'Failed to load jobs'}</div>
+      ) : (
+        <div className="@container space-y-3">
+          {displayJobs.length === 0 && search.trim() && (
+            <div className="rounded-2xl border border-slate-200/80 bg-white py-10 px-4 text-center text-sm text-slate-500">
+              No jobs match your search.
+            </div>
+          )}
+
+          {displayJobs.map((job, index) => {
+            const canScreen = job.status === 'Published' || job.status === 'Draft';
+            const Icon = index % 2 === 0 ? Code2 : Briefcase;
+            const tint = index % 2 === 0 ? 'bg-indigo-50 text-indigo-600' : 'bg-blue-50 text-blue-600';
+            return (
+              <div
+                key={job.id}
+                className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_2px_rgba(18,18,28,0.04)] grid grid-cols-1 gap-4 @5xl:grid-cols-[minmax(0,1fr)_auto] @5xl:items-center @5xl:gap-8 @5xl:min-h-[82px]"
               >
-                {tab}
-              </button>
-            ))}
-          </div>
-        </div>
+                <div className="flex items-center gap-3.5 min-w-0">
+                  <span className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${tint}`}>
+                    <Icon className="w-[18px] h-[18px]" strokeWidth={1.8} />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+                      <button
+                        type="button"
+                        onClick={() => viewJob(job)}
+                        className="text-[15px] font-semibold tracking-tight text-slate-900 hover:text-indigo-700 text-left break-words min-w-0"
+                      >
+                        {job.title}
+                      </button>
+                      <Badge className={`gap-1.5 !rounded-md !text-[11px] ${getStatusColor(job.status)}`}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+                        {job.status}
+                      </Badge>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[11.5px] text-slate-500">
+                      <span className="font-mono text-[10.5px] text-slate-400">{job.jobCode || '—'}</span>
+                      {job.department && (
+                        <span className="inline-flex items-center gap-1.5"><Building2 className="w-3 h-3 text-slate-400" />{job.department}</span>
+                      )}
+                      {job.employmentType && (
+                        <span className="inline-flex items-center gap-1.5"><Clock3 className="w-3 h-3 text-slate-400" />{job.employmentType}</span>
+                      )}
+                      {job.location && (
+                        <span className="inline-flex items-center gap-1.5"><MapPin className="w-3 h-3 text-slate-400" />{job.location}</span>
+                      )}
+                      <span className="inline-flex items-center gap-1.5">
+                        <CalendarDays className="w-3 h-3 text-slate-400" />
+                        {job.status === 'Published' ? 'Published' : 'Created'} {job.createdOn ? formatDate(job.createdOn) : '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-        <div className="p-4 border-b border-slate-100">
-          <div className="flex flex-col sm:flex-row gap-3">
-            <SearchInput
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by job title or job ID..."
-              className="flex-1"
-            />
-            <FilterDropdown value={sortBy} options={sortOptions} onChange={setSortBy} className="sm:w-56" />
-          </div>
-        </div>
+                <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-t border-slate-100 pt-3.5 @5xl:flex-nowrap @5xl:border-t-0 @5xl:pt-0 @5xl:gap-8">
+                <div className="flex flex-wrap items-center gap-x-7 gap-y-3 @5xl:grid @5xl:grid-cols-[84px_84px_136px] @5xl:gap-x-0">
+                  <div>
+                    <p className="text-[10.5px] text-slate-500">Candidates</p>
+                    <p className="text-[19px] font-semibold tracking-tight tabular-nums text-slate-900 leading-tight">{job.candidates}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10.5px] text-slate-500">Shortlisted</p>
+                    <p className="text-[19px] font-semibold tracking-tight tabular-nums text-slate-900 leading-tight">{shortlistedByJob[job.id] || 0}</p>
+                  </div>
+                  <div className="@5xl:w-[136px]">
+                    <p className="text-[10.5px] text-slate-500">Avg. Match</p>
+                    {job.avgScore > 0 ? (
+                      <p className="text-[19px] font-semibold tracking-tight tabular-nums text-slate-900 leading-tight">{job.avgScore}%</p>
+                    ) : (
+                      <p className="text-[19px] font-semibold text-slate-300 leading-tight">—</p>
+                    )}
+                  </div>
+                </div>
 
-        {loading ? (
-          <LoadingState message="Loading jobs..." />
-        ) : error ? (
-          <div className="p-8 text-center text-sm text-red-600">{error.message || 'Failed to load jobs'}</div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Job ID</th>
-                  <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Job Title</th>
-                  <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Location</th>
-                  <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Candidates</th>
-                  <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Avg Match Score</th>
-                  <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Status</th>
-                  <th className="text-left text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Created On</th>
-                  <th className="text-right text-xs font-medium text-slate-500 uppercase tracking-wider py-3 px-4">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {displayJobs.length === 0 && search.trim() && (
-                  <tr>
-                    <td colSpan={8} className="py-10 px-4 text-center text-sm text-slate-500">
-                      No jobs match your search.
-                    </td>
-                  </tr>
-                )}
-                {displayJobs.map((job) => {
-                  const scoreColors = job.avgScore > 0 ? getScoreColor(job.avgScore) : null;
-                  return (
-                    <tr key={job.id} className="hover:bg-slate-50/50">
-                      <td className="py-3.5 px-4 text-sm text-slate-600">{job.jobCode || '—'}</td>
-                      <td className="py-3.5 px-4 text-sm font-semibold text-slate-900">{job.title}</td>
-                      <td className="py-3.5 px-4 text-sm text-slate-600">{job.location || '—'}</td>
-                      <td className="py-3.5 px-4 text-sm font-medium text-slate-700">{job.candidates}</td>
-                      <td className="py-3.5 px-4">
-                        {scoreColors ? (
-                          <span className={`text-sm font-bold ${scoreColors.text}`}>{job.avgScore}%</span>
-                        ) : (
-                          <span className="text-sm text-slate-400">—</span>
-                        )}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <Badge className={getStatusColor(job.status)}>{job.status}</Badge>
-                      </td>
-                      <td className="py-3.5 px-4 text-sm text-slate-500">{job.createdOn ? formatDate(job.createdOn) : '—'}</td>
-                      <td className="py-3.5 px-4 text-right">
-                        <button
-                          type="button"
-                          onClick={(e) => openMenu(e, job.id)}
-                          aria-label={`Actions for ${job.title}`}
-                          className={`p-1.5 rounded-lg ${
-                            menu?.jobId === job.id
-                              ? 'text-slate-700 bg-slate-100'
-                              : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
-                          }`}
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                <div className="flex items-center justify-end gap-2 shrink-0 ml-auto @5xl:ml-0 @5xl:w-[252px]">
+                  {canScreen && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/resume-screening?job=${job.id}`)}
+                      className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 hover:bg-slate-50"
+                    >
+                      <FileText className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.8} />
+                      Screen
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/candidates?job=${job.id}`)}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg bg-indigo-50 border border-indigo-100 text-xs font-medium text-indigo-700 hover:bg-indigo-100"
+                  >
+                    Candidates <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => openMenu(e, job.id)}
+                    aria-label={`Actions for ${job.title}`}
+                    className={`w-8 h-8 inline-flex items-center justify-center rounded-lg ${
+                      menu?.jobId === job.id
+                        ? 'text-slate-700 bg-slate-100'
+                        : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </button>
+                </div>
+                </div>
+              </div>
+            );
+          })}
 
-        <div className="px-4 py-3 border-t border-slate-100">
-          <p className="text-sm text-slate-500">Showing {displayJobs.length === 0 ? 0 : 1} to {displayJobs.length} of {displayJobs.length} jobs.</p>
+          <button
+            type="button"
+            onClick={() => navigate('/jobs/create')}
+            className="w-full flex items-center gap-3.5 rounded-2xl border border-dashed border-slate-300 bg-white/50 p-4 text-left hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors"
+          >
+            <span className="w-11 h-11 rounded-xl border border-slate-200 bg-white flex items-center justify-center shrink-0">
+              <Plus className="w-4 h-4 text-slate-600" strokeWidth={1.8} />
+            </span>
+            <span>
+              <span className="block text-[13px] font-semibold text-slate-900">Create a new job</span>
+              <span className="block text-xs text-slate-500 mt-0.5">Add a job posting to start screening candidates.</span>
+            </span>
+          </button>
+
+          <p className="text-xs text-slate-500 pt-1">
+            Showing {displayJobs.length === 0 ? 0 : 1} to {displayJobs.length} of {displayJobs.length} jobs.
+          </p>
         </div>
-      </Card>
+      )}
 
       {menu && menuJob && (
         <>

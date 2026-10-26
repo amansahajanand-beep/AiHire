@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase } from 'lucide-react';
+import { Briefcase, Code2 } from 'lucide-react';
 import Card, { CardHeader } from '../ui/Card';
 import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchJobs } from '../../store/slices/jobsSlice';
@@ -21,14 +21,15 @@ export default function TopJobs() {
     () => [...jobs].sort((a, b) => (b.candidates || 0) - (a.candidates || 0)).slice(0, 5),
     [jobs]
   );
+  const totalCandidates = useMemo(() => jobs.reduce((sum, j) => sum + (j.candidates || 0), 0), [jobs]);
 
   return (
-    <Card className="!rounded-2xl">
+    <Card className="!rounded-2xl h-full">
       <CardHeader
         title="Top Jobs"
         subtitle="Roles attracting the most candidates"
         action={
-          <button onClick={() => navigate('/jobs')} className="text-sm font-medium text-indigo-600 hover:text-indigo-700">
+          <button onClick={() => navigate('/jobs')} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">
             View all
           </button>
         }
@@ -52,22 +53,34 @@ export default function TopJobs() {
           )}
         </div>
       ) : (
-        <div className="space-y-2">
-          {top.map((job) => (
-            <button
-              key={job.id}
-              onClick={() => navigate('/jobs')}
-              className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-slate-50 transition-colors text-left"
-            >
-              <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center shrink-0">
-                <Briefcase className="w-4 h-4 text-indigo-600" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-slate-900 truncate">{job.title}</p>
-                <p className="text-xs text-slate-400">{job.candidates} Candidates · {job.jobCode}</p>
-              </div>
-            </button>
-          ))}
+        <div className="space-y-3">
+          {top.map((job) => {
+            const share = totalCandidates ? Math.round(((job.candidates || 0) / totalCandidates) * 100) : 0;
+            return (
+              <button
+                key={job.id}
+                onClick={() => navigate('/jobs')}
+                className="w-full rounded-xl border border-slate-200/80 bg-white p-3 hover:border-indigo-200 hover:bg-indigo-50/30 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                    <Code2 className="w-4 h-4 text-indigo-600" strokeWidth={1.8} />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-slate-900 truncate">{job.title}</p>
+                    <p className="font-mono text-[10.5px] text-slate-500">{job.jobCode}</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className="text-slate-600"><span className="font-semibold text-slate-900">{job.candidates}</span> Candidates</span>
+                  <span className="font-mono text-slate-500">{share}%</span>
+                </div>
+                <div className="mt-1.5 h-1 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="h-full rounded-full bg-indigo-600" style={{ width: `${share}%` }} />
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
     </Card>

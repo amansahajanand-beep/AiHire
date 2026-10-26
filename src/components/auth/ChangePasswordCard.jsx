@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
-import Card from '../ui/Card';
 import { changePassword } from '../../api/auth';
 
 const inputClass =
-  'w-full px-3.5 py-2.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent';
+  'w-full h-10 px-3 text-[13px] text-slate-900 placeholder:text-slate-400 border border-slate-200 rounded-xl bg-white shadow-[0_1px_2px_rgba(18,18,28,0.03)] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400';
 
 const empty = { currentPassword: '', password: '', confirmPassword: '' };
 
@@ -46,13 +45,15 @@ export default function ChangePasswordCard() {
   };
 
   return (
-    <Card className="mt-6">
-      <h3 className="text-base font-bold text-slate-900">Change Password</h3>
-      <p className="text-sm text-slate-500 mt-0.5 mb-6">Confirm your current password to set a new one.</p>
+    <section className="rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(18,18,28,0.04)] overflow-hidden">
+      <div className="px-6 py-5 border-b border-slate-100">
+        <h2 className="text-[15px] font-semibold tracking-tight text-slate-900">Change Password</h2>
+        <p className="text-xs text-slate-500 mt-1">Confirm your current password to set a new one.</p>
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-5 max-w-lg">
+      <form onSubmit={handleSubmit} className="space-y-4 p-6 max-w-lg">
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-1.5">Current Password</label>
+          <label className="block text-xs font-semibold text-slate-800 mb-1.5">Current Password</label>
           <input
             name="currentPassword"
             type={show ? 'text' : 'password'}
@@ -63,7 +64,7 @@ export default function ChangePasswordCard() {
           />
         </div>
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-1.5">New Password</label>
+          <label className="block text-xs font-semibold text-slate-800 mb-1.5">New Password</label>
           <div className="relative">
             <input
               name="password"
@@ -84,7 +85,7 @@ export default function ChangePasswordCard() {
           </div>
         </div>
         <div>
-          <label className="block text-sm font-semibold text-slate-700 mb-1.5">Confirm New Password</label>
+          <label className="block text-xs font-semibold text-slate-800 mb-1.5">Confirm New Password</label>
           <input
             name="confirmPassword"
             type={show ? 'text' : 'password'}
@@ -99,11 +100,11 @@ export default function ChangePasswordCard() {
         <button
           type="submit"
           disabled={loading || !form.currentPassword}
-          className="w-full sm:w-auto px-8 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold"
+          className="w-full sm:w-auto h-9 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-[13px] font-semibold shadow-[0_1px_2px_rgba(107,71,230,0.45),inset_0_1px_0_rgba(255,255,255,0.2)]"
         >
           {loading ? 'Updating...' : 'Update Password'}
         </button>
       </form>
-    </Card>
+    </section>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus } from 'lucide-react';
-import StatCard from '../components/dashboard/StatCard';
+import { CalendarDays, Plus } from 'lucide-react';
+import StatCard, { StatStrip } from '../components/dashboard/StatCard';
 import ScreeningChart from '../components/dashboard/ScreeningChart';
 import HiringPipeline from '../components/dashboard/HiringPipeline';
 import RecentCandidates from '../components/dashboard/RecentCandidates';
@@ -89,52 +89,65 @@ export default function Dashboard() {
         value: String(totals.awaitingReview ?? 0),
         caption: 'Human review',
         detail: `${totals.humanReviewed ?? 0} reviewed of ${totals.candidatesScreened ?? 0} screened`,
+        progress: totals.candidatesScreened ? ((totals.humanReviewed ?? 0) / totals.candidatesScreened) * 100 : 0,
+        link: { to: '/candidates', label: 'Review' },
         icon: 'UserCheck',
       },
       {
         title: 'Average Match Score',
         value: `${totals.averageMatchScore ?? 0}%`,
         icon: 'Target',
+        dashes: Number(totals.averageMatchScore) || 0,
+        caption: `Across ${totals.candidatesScreened ?? 0} candidates`,
         subtitle: totals.candidatesScreened ? 'Across screened candidates' : 'No data this month',
       },
       getHiringTimeCard(totals),
     ];
   }, [totals]);
 
+  const today = new Date().toLocaleDateString('en-GB', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+  });
+  const headline = stats.filter((stat) => stat.variant !== 'productivity');
+  const productivity = stats.find((stat) => stat.variant === 'productivity');
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Recruitment Overview</h1>
-          <p className="text-slate-500 mt-1">
+          <p className="eyebrow mb-3">{today.replace(/,? /, ' · ').toUpperCase()}</p>
+          <h1 className="text-[28px] sm:text-[32px] font-bold text-slate-900 tracking-tight leading-none">Recruitment Overview</h1>
+          <p className="text-sm text-slate-500 mt-2.5">
             Track your hiring performance and candidate pipeline.
           </p>
         </div>
-        <button
-          onClick={() => navigate('/jobs/create')}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-sm shrink-0"
-        >
-          <Plus className="w-4 h-4" /> Create Job
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
-        {stats.map((stat) => (
-          <StatCard key={stat.title} {...stat} />
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2">
-          <ScreeningChart />
+        <div className="flex items-center gap-2.5 shrink-0">
+          <span className="hidden sm:inline-flex items-center gap-2 px-3.5 h-9 rounded-xl border border-slate-200 bg-white text-[13px] font-medium text-slate-800 shadow-[0_1px_2px_rgba(18,18,28,0.04)]">
+            <CalendarDays className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.8} />
+            This month
+          </span>
+          <button
+            onClick={() => navigate('/jobs/create')}
+            className="inline-flex items-center justify-center gap-2 px-4 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-semibold shadow-[0_1px_2px_rgba(107,71,230,0.45),inset_0_1px_0_rgba(255,255,255,0.2)]"
+          >
+            <Plus className="w-3.5 h-3.5" strokeWidth={2.4} /> Create Job
+          </button>
         </div>
+      </div>
+
+      {/* Each row is [main | 340px side] with both cards stretched to the same height, so edges line up. */}
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-5 items-stretch">
+        <StatStrip>
+          {headline.map((stat) => (
+            <StatCard key={stat.title} {...stat} />
+          ))}
+        </StatStrip>
+        {productivity && <StatCard {...productivity} />}
+
+        <ScreeningChart />
         <HiringPipeline />
-      </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <div className="xl:col-span-2">
-          <RecentCandidates />
-        </div>
+        <RecentCandidates />
         <TopJobs />
       </div>
     </div>

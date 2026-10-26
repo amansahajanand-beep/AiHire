@@ -179,7 +179,7 @@ export default function CandidateDetails() {
           <button
             onClick={handleDownloadPdf}
             disabled={downloading}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm disabled:opacity-50 whitespace-nowrap shrink-0"
           >
             <Download className="w-4 h-4 text-slate-400" />
             {downloading ? 'Generating...' : 'Download PDF'}

@@ -69,7 +69,7 @@ export default function FileUploadZone({
       <div
         onDragOver={(e) => e.preventDefault()}
         onDrop={handleDrop}
-        className="border-2 border-dashed border-indigo-300 bg-indigo-50/40 rounded-xl p-12 text-center hover:border-indigo-500 hover:bg-indigo-50/70 transition-colors cursor-pointer"
+        className="rounded-2xl border border-dashed border-indigo-200 bg-[radial-gradient(rgba(107,71,230,0.13)_1px,transparent_1px)] [background-size:14px_14px] bg-slate-50/40 px-6 py-16 text-center hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors cursor-pointer"
       >
         <input
           type="file"
@@ -81,17 +81,20 @@ export default function FileUploadZone({
           disabled={files.length >= maxFiles}
         />
         <label htmlFor="file-upload" className="cursor-pointer block">
-          <div className="w-14 h-14 mx-auto mb-4 flex items-center justify-center">
-            <Upload className="w-10 h-10 text-indigo-600" strokeWidth={1.5} />
+          <div className="w-12 h-12 mx-auto mb-4 rounded-2xl bg-white border border-slate-200 shadow-[0_4px_12px_-4px_rgba(18,18,28,0.12)] flex items-center justify-center">
+            <Upload className="w-5 h-5 text-indigo-600" strokeWidth={1.8} />
           </div>
-          <p className="text-base font-semibold text-indigo-600 mb-1">Drop resumes here or click to browse</p>
-          <p className="text-sm text-slate-400">PDF only · max 10 files · 2 MB per file · 20 MB total</p>
+          <p className="text-[13px] font-semibold text-slate-900">Drop resumes here</p>
+          <p className="text-xs text-slate-500 mt-1">
+            or <span className="font-semibold text-indigo-600">click to browse</span> from your computer
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            {['PDF only', `max ${maxFiles} files`, `${formatFileSize(maxFileSize)} per file`, `${formatFileSize(maxTotalSize)} total`].map((chip) => (
+              <span key={chip} className="px-2.5 h-6 inline-flex items-center rounded-md border border-slate-200 bg-white text-[10.5px] font-mono text-slate-600">{chip}</span>
+            ))}
+          </div>
         </label>
       </div>
-
-      <p className="mt-4 text-sm text-slate-500">
-        Uploaded: <span className="font-semibold text-slate-700">{files.length} / {maxFiles}</span>
-      </p>
 
       {errors.length > 0 && (
         <div className="mt-3 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-4 py-3 space-y-1">
@@ -102,7 +105,7 @@ export default function FileUploadZone({
       )}
 
       {files.length > 0 && (
-        <div className="mt-3 divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden bg-white">
+        <div className="mt-4 divide-y divide-slate-100 border border-slate-200/80 rounded-2xl overflow-hidden bg-white">
           {files.map((file) => (
             <div key={file.id} className="flex items-center justify-between px-4 py-3.5 hover:bg-slate-50">
               <div className="flex items-center gap-3 min-w-0">

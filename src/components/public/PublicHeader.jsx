@@ -1,82 +1,54 @@
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { ArrowRight } from 'lucide-react';
 import logo from '../../assets/logo.png';
 
 const navItems = [
-  { to: { pathname: '/', hash: 'features' }, label: 'Features', hash: '#features' },
-  { to: { pathname: '/', hash: 'how-it-works' }, label: 'How It Works', hash: '#how-it-works' },
-  // Temporarily disabled: stays visible but does nothing when clicked. Remove `disabled` to restore the link.
-  { to: '/pricing', label: 'Pricing', disabled: true },
+  { label: 'Product', hash: 'product' },
+  { label: 'How it works', hash: 'how-it-works' },
+  { label: 'Workflow', hash: 'workflow' },
+  { label: 'FAQ', hash: 'faq' },
 ];
 
 export default function PublicHeader() {
-  const location = useLocation();
+  const { pathname, hash } = useLocation();
   return (
-    <header className="sticky top-0 z-40 pt-4">
-      <div className="w-[85%] mx-auto h-16 px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 bg-white/95 border border-slate-200 shadow-sm backdrop-blur-sm rounded-xl min-w-0">
-        <Link to="/" className="flex items-center shrink-0 min-w-0">
-          <img
-            src={logo}
-            alt="HireAI"
-            className="h-11 w-auto max-w-[200px] object-contain"
-          />
-        </Link>
-
-        <nav className="hidden md:flex items-center gap-7">
-          {navItems.map((item) => (item.disabled ? (
-            <span
-              key={item.label}
-              aria-disabled="true"
-              className="text-sm font-medium transition-colors text-slate-600 hover:text-slate-900 cursor-pointer"
-            >
-              {item.label}
-            </span>
-          ) : (
-            <NavLink
-              key={item.label}
-              to={item.to}
-              className={({ isActive }) => {
-                const active = item.hash
-                  ? location.pathname === '/' && location.hash === item.hash
-                  : isActive;
-                return `text-sm font-medium transition-colors ${
-                  active ? 'text-indigo-600' : 'text-slate-600 hover:text-slate-900'
-                }`;
-              }}
-            >
-              {item.label}
-            </NavLink>
-          )))}
-        </nav>
-
-        <div className="flex items-center gap-3">
-          <nav className="flex md:hidden items-center gap-1.5 min-w-0">
-            {navItems.map((item) => (item.disabled ? (
-              <span key={item.label} aria-disabled="true" className="text-xs font-medium text-slate-600 cursor-pointer">
-                {item.label}
-              </span>
-            ) : (
-              <NavLink
-                key={item.label}
-                to={item.to}
-                className={({ isActive }) => {
-                  const active = item.hash
-                    ? location.pathname === '/' && location.hash === item.hash
-                    : isActive;
-                  return `text-xs font-medium ${active ? 'text-indigo-600' : 'text-slate-600'}`;
-                }}
+    <>
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-slate-200/70 bg-white/85 backdrop-blur-md">
+      <div className="w-[92%] md:w-[60%] mx-auto h-16 flex items-center justify-between gap-4 min-w-0">
+        <div className="flex items-center gap-10 min-w-0">
+          <Link to="/" className="flex items-center shrink-0">
+            <img src={logo} alt="HireScop" className="h-10 w-auto max-w-[190px] object-contain" />
+          </Link>
+          <nav className="hidden md:flex items-center gap-7">
+            {navItems.map((item) => (
+              <Link
+                key={item.hash}
+                to={{ pathname: '/', hash: item.hash }}
+                className={`text-[14px] font-medium transition-colors ${
+                  pathname === '/' && hash === `#${item.hash}` ? 'text-indigo-600' : 'text-slate-500 hover:text-slate-900'
+                }`}
               >
                 {item.label}
-              </NavLink>
-            )))}
+              </Link>
+            ))}
           </nav>
+        </div>
+
+        <div className="flex items-center gap-4 shrink-0">
+          <Link to="/login" className="text-[14px] font-medium text-slate-800 hover:text-indigo-600">
+            Sign in
+          </Link>
           <Link
-            to="/login"
-            className="inline-flex items-center justify-center px-3 sm:px-4 py-2 rounded-lg border border-indigo-600 bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 hover:border-indigo-700 shrink-0"
+            to="/register"
+            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-lg bg-[#12121C] text-white text-[13.5px] font-semibold hover:bg-black"
           >
-            Sign In
+            Get started <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
       </div>
     </header>
+    {/* the header is fixed, so reserve its height in the page flow */}
+    <div className="h-16" aria-hidden />
+    </>
   );
 }

@@ -1,30 +1,35 @@
 import { Link } from 'react-router-dom';
-import { ShieldCheck } from 'lucide-react';
+import logo from '../../assets/logo.png';
+
+const linkClass = 'block text-[11px] text-slate-500 hover:text-slate-900';
 
 export default function PublicFooter() {
   return (
-    <footer className="bg-white border-t border-slate-200 overflow-x-hidden">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-5 sm:gap-4 min-w-0">
-        <div className="flex items-start sm:items-center gap-2 min-w-0">
-          <ShieldCheck className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5 sm:mt-0" />
-          <span className="text-sm text-slate-500 break-words leading-relaxed">
-            HireAI — AI-Powered Hiring Intelligence
-          </span>
+    <footer className="overflow-x-clip">
+      <div className="w-[92%] md:w-[60%] mx-auto mt-14 pt-8 pb-8 border-t border-slate-200/80">
+        <div className="flex flex-col gap-8 sm:flex-row sm:justify-between">
+          <div>
+            <Link to="/" className="inline-flex items-center">
+              <img src={logo} alt="HireScop" className="h-9 w-auto max-w-[170px] object-contain" />
+            </Link>
+            <p className="mt-3 text-[11px] text-slate-500">AI-Powered Hiring Intelligence.</p>
+          </div>
+          <div className="flex gap-16">
+            <div className="space-y-2.5">
+              <p className="text-[11px] font-semibold text-slate-900">Product</p>
+              <Link to={{ pathname: '/', hash: 'product' }} className={linkClass}>AI agents</Link>
+              <Link to={{ pathname: '/', hash: 'how-it-works' }} className={linkClass}>How it works</Link>
+              <Link to={{ pathname: '/', hash: 'workflow' }} className={linkClass}>Workflow</Link>
+            </div>
+            <div className="space-y-2.5">
+              <p className="text-[11px] font-semibold text-slate-900">Company</p>
+              <Link to={{ pathname: '/', hash: 'faq' }} className={linkClass}>FAQ</Link>
+              <span className={linkClass}>Help &amp; Support</span>
+              <span className={linkClass}>Privacy</span>
+            </div>
+          </div>
         </div>
-        <nav className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4 text-sm font-medium min-w-0">
-          <Link to={{ pathname: '/', hash: 'features' }} className="text-slate-600 hover:text-slate-900">
-            Features
-          </Link>
-          <Link to={{ pathname: '/', hash: 'how-it-works' }} className="text-slate-600 hover:text-slate-900">
-            How It Works
-          </Link>
-          <Link to="/pricing" className="text-slate-600 hover:text-slate-900">
-            Pricing
-          </Link>
-          <Link to="/login" className="text-indigo-600 hover:text-indigo-700">
-            Sign In
-          </Link>
-        </nav>
+        <p className="mt-8 text-[10.5px] text-slate-500">© {new Date().getFullYear()} HireScop. All rights reserved.</p>
       </div>
     </footer>
   );

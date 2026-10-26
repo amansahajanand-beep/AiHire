@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  AreaChart,
-  Area,
+  BarChart,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -14,10 +14,10 @@ import { useAppDispatch, useAppSelector } from '../../store/hooks';
 import { fetchScreeningOverview } from '../../store/slices/dashboardSlice';
 
 const SERIES = [
-  { key: 'screened', name: 'Screened', color: '#6366F1', fillId: 'fillScreened' },
-  { key: 'shortlisted', name: 'Shortlisted', color: '#34D399', fillId: 'fillShortlisted' },
-  { key: 'review', name: 'Move to Review', color: '#F59E0B', fillId: 'fillReview' },
-  { key: 'rejected', name: 'Rejected', color: '#FB7185', fillId: 'fillRejected' },
+  { key: 'screened', name: 'Screened', color: '#7C6AE8', fillId: 'fillScreened' },
+  { key: 'shortlisted', name: 'Shortlisted', color: '#2FA66E', fillId: 'fillShortlisted' },
+  { key: 'review', name: 'Move to Review', color: '#E7A100', fillId: 'fillReview' },
+  { key: 'rejected', name: 'Rejected', color: '#E5484D', fillId: 'fillRejected' },
 ];
 
 function ChartTooltip({ active, payload, label }) {
@@ -65,7 +65,10 @@ export default function ScreeningChart() {
 
   const visible = SERIES.filter((s) => !focus || s.key === focus);
   const hasData = chartData.some((d) => SERIES.some((s) => d[s.key]));
-  const maxY = Math.max(5, ...chartData.flatMap((d) => visible.map((s) => d[s.key])));
+  const totals = Object.fromEntries(SERIES.map((series) => [series.key, chartData.reduce((sum, d) => sum + d[series.key], 0)]));
+  const peak = Math.max(4, ...chartData.flatMap((d) => visible.map((s) => d[s.key])));
+  const maxY = Math.ceil(peak / 4) * 4; // four even gridline steps
+  const yTicks = [0, 1, 2, 3, 4].map((i) => (maxY / 4) * i);
 
   useEffect(() => {
     dispatch(fetchScreeningOverview({ period }));
@@ -76,13 +79,40 @@ export default function ScreeningChart() {
   };
 
   return (
-    <Card className="!rounded-2xl">
-      <CardHeader
-        title="Candidate Screening Overview"
-        subtitle="Candidate movement through screening"
-        action={<PeriodTabs value={period} onChange={changePeriod} />}
-      />
-      <div className={`h-72 transition-opacity ${refreshing ? 'opacity-50' : ''}`}>
+    <Card className="!rounded-2xl !p-0 h-full flex flex-col">
+      <div className="px-6 pt-5">
+        <CardHeader
+          title="Candidate Screening Overview"
+          subtitle="Candidate movement through screening"
+          className="flex-wrap gap-y-3"
+          action={<PeriodTabs value={period} onChange={changePeriod} />}
+        />
+
+        <div className="flex flex-wrap items-start gap-x-8 gap-y-3 pb-1">
+          {SERIES.map((series) => {
+            const dimmed = focus && focus !== series.key;
+            return (
+              <button
+                key={series.key}
+                type="button"
+                onClick={() => setFocus(focus === series.key ? null : series.key)}
+                title={focus === series.key ? 'Show all' : `Show only ${series.name}`}
+                className={`text-left transition-opacity ${dimmed ? 'opacity-40' : ''}`}
+              >
+                <span className="flex items-center gap-1.5 text-xs text-slate-600">
+                  <span className="w-2 h-2 rounded-[3px]" style={{ backgroundColor: series.color }} />
+                  {series.name}
+                </span>
+                <span className="block text-[22px] font-semibold tracking-tight tabular-nums text-slate-900 mt-1.5">
+                  {totals[series.key]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className={`flex-1 min-h-[300px] px-3 pb-4 transition-opacity ${refreshing ? 'opacity-50' : ''}`}>
         {loading ? (
           <div className="h-full flex items-center justify-center text-sm text-slate-400">Loading chart…</div>
         ) : !hasData ? (
@@ -92,68 +122,39 @@ export default function ScreeningChart() {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 10, right: 12, left: -8, bottom: 0 }}>
-              <defs>
-                {SERIES.map((series) => (
-                  <linearGradient key={series.fillId} id={series.fillId} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={series.color} stopOpacity={0.28} />
-                    <stop offset="100%" stopColor={series.color} stopOpacity={0.02} />
-                  </linearGradient>
-                ))}
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+            <BarChart data={chartData} margin={{ top: 10, right: 12, left: -14, bottom: 0 }} barGap={-20} barCategoryGap="20%">
+              <CartesianGrid stroke="#ECECF1" vertical={false} />
               <XAxis
                 dataKey="label"
-                tick={{ fontSize: 12, fill: '#94A3B8' }}
+                tick={{ fontSize: 11, fill: '#6E6E7E', fontFamily: 'JetBrains Mono, monospace' }}
                 axisLine={false}
                 tickLine={false}
                 dy={6}
                 interval="preserveStartEnd"
               />
               <YAxis
-                tick={{ fontSize: 12, fill: '#94A3B8' }}
+                tick={{ fontSize: 11, fill: '#9A9AA8', fontFamily: 'JetBrains Mono, monospace' }}
                 axisLine={false}
                 tickLine={false}
                 domain={[0, maxY]}
+                ticks={yTicks}
                 allowDecimals={false}
               />
-              <Tooltip content={<ChartTooltip />} />
+              <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(124,106,232,0.06)' }} />
               {visible.map((series) => (
-                <Area
+                <Bar
                   key={series.key}
-                  type="monotone"
                   dataKey={series.key}
                   name={series.name}
-                  stroke={series.color}
-                  strokeWidth={2.5}
-                  fill={`url(#${series.fillId})`}
-                  dot={{ r: 3.5, strokeWidth: 2, fill: '#fff' }}
-                  activeDot={{ r: 5 }}
+                  fill={series.color}
+                  radius={[4, 4, 0, 0]}
+                  barSize={20}
+                  isAnimationActive={false}
                 />
               ))}
-            </AreaChart>
+            </BarChart>
           </ResponsiveContainer>
         )}
-      </div>
-
-      <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 pt-3">
-        {SERIES.map((series) => {
-          const dimmed = focus && focus !== series.key;
-          return (
-            <button
-              key={series.key}
-              type="button"
-              onClick={() => setFocus(focus === series.key ? null : series.key)}
-              title={focus === series.key ? 'Show all' : `Show only ${series.name}`}
-              className={`inline-flex items-center gap-2 px-2 py-1 rounded-md text-xs font-medium transition-opacity hover:bg-slate-50 ${
-                dimmed ? 'opacity-40' : 'text-slate-600'
-              }`}
-            >
-              <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: series.color }} />
-              {series.name}
-            </button>
-          );
-        })}
       </div>
     </Card>
   );

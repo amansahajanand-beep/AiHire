@@ -27,7 +27,7 @@ export default function ForgotPassword() {
   return (
     <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 sm:p-6">
       <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-8 sm:p-10">
-        <img src={logo} alt="HireAI" className="h-9 w-auto max-w-[160px] object-contain mb-8" />
+        <img src={logo} alt="HireScop" className="h-9 w-auto max-w-[160px] object-contain mb-8" />
 
         {sent ? (
           <div className="text-center">

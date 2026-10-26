@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Briefcase, Search, User, X } from 'lucide-react';
 import { useAppSelector } from '../../store/hooks';
@@ -28,6 +28,18 @@ export default function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const closeDropdown = useCallback(() => setOpen(false), []);
   useClickOutside(wrapRef, closeDropdown, open);
+
+  // Ctrl/Cmd + K jumps to the search box.
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   const jobs = useAppSelector((s) => s.jobs.items);
   // The unfiltered candidate list is cached under this key by the store.
@@ -74,7 +86,7 @@ export default function GlobalSearch() {
   };
 
   return (
-    <div className="relative w-full max-w-xl" ref={wrapRef}>
+    <div className="relative w-full max-w-[340px]" ref={wrapRef}>
       <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
       <input
         ref={inputRef}
@@ -88,8 +100,13 @@ export default function GlobalSearch() {
         onKeyDown={handleKeyDown}
         placeholder="Search jobs and candidates..."
         aria-label="Search jobs and candidates"
-        className="w-full pl-10 pr-9 py-2.5 text-sm border border-slate-200 rounded-full bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
+        className="w-full pl-10 pr-12 h-9 text-[13px] border border-slate-200 rounded-xl bg-white shadow-[0_1px_2px_rgba(18,18,28,0.04)] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 placeholder:text-slate-400"
       />
+      {!query && (
+        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none font-mono text-[10px] text-slate-500 bg-slate-100 border border-slate-200 rounded-md px-1.5 py-px">
+          ⌘K
+        </kbd>
+      )}
       {query && (
         <button
           type="button"

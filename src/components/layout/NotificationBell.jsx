@@ -177,11 +177,11 @@ export default function NotificationBell() {
           type="button"
           onClick={toggle}
           aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
-          className="relative p-2 text-slate-500 hover:bg-slate-100 rounded-full transition-colors"
+          className="relative w-9 h-9 flex items-center justify-center text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-[0_1px_2px_rgba(18,18,28,0.04)] transition-colors"
         >
-          <Bell className="w-5 h-5" />
+          <Bell className="w-[17px] h-[17px]" strokeWidth={1.8} />
           {unreadCount > 0 && (
-            <span className="absolute top-0.5 right-0 min-w-[18px] h-[18px] px-1 bg-indigo-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white flex items-center justify-center">
+            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 bg-indigo-600 text-white text-[10px] font-bold rounded-full ring-2 ring-white flex items-center justify-center">
               {unreadCount > 9 ? '9+' : unreadCount}
             </span>
           )}

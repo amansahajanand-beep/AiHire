@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowUpDown, Briefcase, CalendarDays, Download, FileSearch, ListFilter } from 'lucide-react';
 import Card from '../components/ui/Card';
 import SearchInput from '../components/ui/SearchInput';
 import FilterDropdown from '../components/ui/FilterDropdown';
@@ -8,6 +8,7 @@ import CandidateTable, { CANDIDATE_CSV_HEADERS, candidateCsvRow } from '../compo
 import { downloadCsv } from '../utils/csv';
 import LoadingState from '../components/ui/LoadingState';
 import useCandidates from '../hooks/useCandidates';
+import { recommendationBucket } from '../utils/recommendation';
 import { getExperienceYears, matchesExperience, parseExperienceQuery } from '../utils/experience';
 
 
@@ -96,6 +97,7 @@ export default function Candidates() {
   const [jobFilter, setJobFilter] = useState(searchParams.get('job') || 'All');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortBy, setSortBy] = useState('screened-on');
+  const [bucket, setBucket] = useState('all');
   const [dateFilter, setDateFilter] = useState('All');
   const [fromDate, setFromDate] = useState('');
   const [toDate, setToDate] = useState('');
@@ -122,13 +124,14 @@ export default function Candidates() {
           terms.every((term) => haystack.includes(term)) &&
           constraints.every((constraint) => matchesExperience(years, constraint));
         const matchesJob = jobFilter === 'All' || c.jobId === jobFilter || c.job === jobFilter;
+        const matchesBucket = bucket === 'all' || recommendationBucket(c.status) === bucket;
         const matchesStatus = statusFilter === 'All' || c.status === statusFilter || c.humanEvaluation === statusFilter;
         let matchesDate = true;
         if (from != null || to != null) {
           const screened = new Date(c.screenedOn).getTime();
           matchesDate = Number.isFinite(screened) && (from == null || screened >= from) && (to == null || screened <= to);
         }
-        return matchesSearch && matchesJob && matchesStatus && matchesDate;
+        return matchesSearch && matchesJob && matchesStatus && matchesDate && matchesBucket;
       })
       .sort((a, b) => {
         if (sortBy === 'score-desc') return b.score - a.score;
@@ -138,45 +141,102 @@ export default function Candidates() {
         if (sortBy === 'time') return compareScreened(a, b, 'time', 'day');
         return 0;
       });
-  }, [candidates, searchIndex, experienceYears, search, jobFilter, statusFilter, sortBy, dateFilter, fromDate, toDate]);
+  }, [candidates, searchIndex, experienceYears, search, jobFilter, statusFilter, sortBy, dateFilter, fromDate, toDate, bucket]);
+
+  const bucketCounts = useMemo(() => {
+    const counts = { all: candidates.length, recommended: 0, consider: 0, not: 0 };
+    candidates.forEach((c) => {
+      const b = recommendationBucket(c.status);
+      if (counts[b] !== undefined) counts[b] += 1;
+    });
+    return counts;
+  }, [candidates]);
+  const summary = [
+    { id: 'all', label: 'All Candidates', dot: 'bg-indigo-500' },
+    { id: 'recommended', label: 'Recommended', dot: 'bg-emerald-500' },
+    { id: 'consider', label: 'Consider after Interview', dot: 'bg-blue-500' },
+    { id: 'not', label: 'Not Recommended', dot: 'bg-red-500' },
+  ];
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const paged = filtered.slice((page - 1) * perPage, page * perPage);
   const jobFilterOptions = [{ value: 'All', label: 'All Jobs' }, ...jobOptions];
 
+  const from = filtered.length === 0 ? 0 : (page - 1) * perPage + 1;
+  const to = Math.min(page * perPage, filtered.length);
+  const pageButton = (active) =>
+    `min-w-8 h-8 px-2 rounded-lg text-xs font-medium ${active ? 'bg-slate-900 text-white' : 'text-slate-700 hover:bg-slate-100'}`;
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Candidates</h1>
-          <p className="text-slate-500 mt-1">View and manage all screened candidates.</p>
+          <h1 className="text-[28px] font-bold text-slate-900 tracking-tight leading-none">Candidates</h1>
+          <p className="text-sm text-slate-500 mt-2.5">View and manage all screened candidates.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => downloadCsv([CANDIDATE_CSV_HEADERS, ...filtered.map(candidateCsvRow)], 'candidates.csv')}
-          disabled={filtered.length === 0}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-50 shadow-sm disabled:opacity-50 shrink-0"
-        >
-          <Download className="w-4 h-4 text-slate-400" />
-          Download CSV
-        </button>
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={() => downloadCsv([CANDIDATE_CSV_HEADERS, ...filtered.map(candidateCsvRow)], 'candidates.csv')}
+            disabled={filtered.length === 0}
+            className="inline-flex items-center gap-2 px-3.5 h-9 bg-white border border-slate-200 rounded-xl text-[13px] font-medium text-slate-800 hover:bg-slate-50 shadow-[0_1px_2px_rgba(18,18,28,0.04)] disabled:opacity-50"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-500" strokeWidth={1.8} />
+            Download CSV
+          </button>
+          <Link
+            to="/resume-screening"
+            className="inline-flex items-center gap-2 px-4 h-9 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-[13px] font-semibold shadow-[0_1px_2px_rgba(107,71,230,0.45),inset_0_1px_0_rgba(255,255,255,0.2)]"
+          >
+            <FileSearch className="w-3.5 h-3.5" strokeWidth={2} />
+            Screen Resumes
+          </Link>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {summary.map((card) => {
+          const count = bucketCounts[card.id] ?? 0;
+          const pct = bucketCounts.all ? Math.round((count / bucketCounts.all) * 100) : 0;
+          const active = bucket === card.id;
+          return (
+            <button
+              key={card.id}
+              type="button"
+              onClick={() => { setBucket(card.id); setPage(1); }}
+              aria-pressed={active}
+              className={`text-left rounded-2xl bg-white px-4 py-3.5 transition-colors border ${
+                active ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-slate-200/80 hover:border-slate-300'
+              } shadow-[0_1px_2px_rgba(18,18,28,0.04)]`}
+            >
+              <span className="flex items-center gap-2 text-xs text-slate-600">
+                <span className={`w-1.5 h-1.5 rounded-full ${card.dot}`} />
+                {card.label}
+              </span>
+              <span className="mt-2 flex items-end justify-between">
+                <span className="text-[24px] font-bold tracking-tight tabular-nums text-slate-900 leading-none">{count}</span>
+                <span className="font-mono text-[10px] text-slate-400">{pct}%</span>
+              </span>
+            </button>
+          );
+        })}
       </div>
 
       <Card padding={false}>
-        <div className="p-4 border-b border-slate-100">
-          <div className="flex flex-col gap-3">
+        <div className="p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <SearchInput
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder="Search by keywords (skills, experience, name etc)"
-              className="w-full"
+              className="w-full lg:flex-1 lg:min-w-[240px]"
             />
-            <div className={`grid grid-cols-1 sm:grid-cols-2 items-end gap-3 ${
-              dateFilter === 'custom' ? 'lg:grid-cols-3 xl:grid-cols-6' : 'lg:grid-cols-4'
-            }`}>
-              <FilterDropdown value={jobFilter} options={jobFilterOptions} onChange={(v) => { setJobFilter(v); setPage(1); }} />
-              <FilterDropdown value={statusFilter} options={statusOptions} onChange={(v) => { setStatusFilter(v); setPage(1); }} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-end gap-3">
+              <FilterDropdown icon={Briefcase} className="lg:w-[165px]" value={jobFilter} options={jobFilterOptions} onChange={(v) => { setJobFilter(v); setPage(1); }} />
+              <FilterDropdown icon={ListFilter} className="lg:w-[120px]" value={statusFilter} options={statusOptions} onChange={(v) => { setStatusFilter(v); setPage(1); }} />
               <FilterDropdown
+                icon={CalendarDays}
+                className="lg:w-[140px]"
                 value={dateFilter}
                 options={[
                   { value: 'All', label: 'All Dates' },
@@ -186,29 +246,31 @@ export default function Candidates() {
               />
               {dateFilter === 'custom' && (
                 <>
-                  <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
+                  <label className="flex flex-col gap-1 text-[11px] font-medium text-slate-500">
                     From Date
                     <input
                       type="date"
                       value={fromDate}
                       max={toDate || undefined}
                       onChange={(e) => { setFromDate(e.target.value); setPage(1); }}
-                      className="w-full px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      className="w-full px-3 py-2 text-[13px] text-slate-800 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
                     />
                   </label>
-                  <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
+                  <label className="flex flex-col gap-1 text-[11px] font-medium text-slate-500">
                     To Date
                     <input
                       type="date"
                       value={toDate}
                       min={fromDate || undefined}
                       onChange={(e) => { setToDate(e.target.value); setPage(1); }}
-                      className="w-full px-3 py-2 text-sm text-slate-700 border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      className="w-full px-3 py-2 text-[13px] text-slate-800 border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400"
                     />
                   </label>
                 </>
               )}
               <FilterDropdown
+                icon={ArrowUpDown}
+                className="lg:w-[215px]"
                 value={sortBy}
                 options={[
                   { value: 'score-desc', label: 'Sort by: Match Score' },
@@ -231,35 +293,30 @@ export default function Candidates() {
           <CandidateTable candidates={paged} showJob showScreenedOn />
         )}
 
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-4 border-t border-slate-100">
-          <p className="text-sm text-slate-500">
-            Showing {filtered.length === 0 ? 0 : (page - 1) * perPage + 1} to {Math.min(page * perPage, filtered.length)} of {filtered.length} candidates
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3.5 border-t border-slate-100">
+          <p className="text-xs text-slate-500">
+            Showing <span className="font-semibold text-slate-900">{from}–{to}</span> of{' '}
+            <span className="font-semibold text-slate-900">{filtered.length}</span> candidates
           </p>
           <div className="flex items-center gap-1">
             <button
               onClick={() => setPage((p) => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+              className="px-3 h-8 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 mr-1"
             >
-              <ChevronLeft className="w-4 h-4" />
+              ‹ Prev
             </button>
             {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map((n) => (
-              <button
-                key={n}
-                onClick={() => setPage(n)}
-                className={`w-9 h-9 rounded-lg text-sm font-medium ${
-                  page === n ? 'bg-indigo-600 text-white' : 'text-slate-600 hover:bg-slate-50'
-                }`}
-              >
+              <button key={n} onClick={() => setPage(n)} className={pageButton(page === n)}>
                 {n}
               </button>
             ))}
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+              className="px-3 h-8 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 ml-1"
             >
-              <ChevronRight className="w-4 h-4" />
+              Next ›
             </button>
           </div>
         </div>
