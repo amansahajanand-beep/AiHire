@@ -1,8 +1,11 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.auth import generate_job_code
 from app.cache import invalidate_client
+from app.config import get_settings
 from app.database import get_db
 from app.deps import get_current_user
 from app.job_linking import is_real_profile, repair_profile_job_codes
@@ -60,6 +63,25 @@ def list_jobs(
     return [_job_out(j, db) for j in jobs]
 
 
+# Job fields that feed the requirement vectors; other edits (status, department...) do not need a re-embed.
+_CONTENT_FIELDS = {"title", "experience", "description", "skills", "responsibilities", "qualifications", "location"}
+
+
+def _index_job_safely(db: Session, job: Job) -> None:
+    """Embed the job for RAG screening. Never blocks saving a job: if Gemini or pgvector is unavailable the
+    worker builds the vectors lazily on the first resume upload for this job."""
+    settings = get_settings()
+    if not settings.gemini_api_key.strip():
+        return
+    try:
+        from app.rag import pipeline
+
+        pipeline.index_job(db, job)
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        logging.getLogger("hireai.rag").warning("Job indexing failed for %s", job.id, exc_info=True)
+
+
 @router.post("", response_model=JobOut, status_code=status.HTTP_201_CREATED)
 def create_job(
     payload: JobCreate,
@@ -89,6 +111,7 @@ def create_job(
     db.commit()
     invalidate_client(current_user.client_id)
     db.refresh(job)
+    _index_job_safely(db, job)
     return _job_out(job, db)
 
 
@@ -149,12 +172,15 @@ def update_job(
         data["title"] = title
     if "employmentType" in data:
         job.employment_type = data.pop("employmentType")
+    changed = set(data)
     for key, value in data.items():
         setattr(job, key, value)
 
     db.commit()
     invalidate_client(current_user.client_id)
     db.refresh(job)
+    if _CONTENT_FIELDS & changed:
+        _index_job_safely(db, job)
     return _job_out(job, db)
 
 

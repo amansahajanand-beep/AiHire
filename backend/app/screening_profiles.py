@@ -118,7 +118,7 @@ def _text_lines(value: Any) -> list[str]:
 
 
 def _parse_pg_array(text: str) -> list[str] | None:
-    """Parse a Postgres array literal like '{"a","b"}' — what n8n writes when it saves a JS array into a text column."""
+    """Parse a Postgres array literal like '{"a","b"}' — what older rows hold when a list was saved into a text column."""
     if not (text.startswith("{") and text.endswith("}")):
         return None
     try:
@@ -635,7 +635,7 @@ def screened_to_candidate_dict(row: ScreenedProfile, job_title: str | None = Non
 
 
 def apply_screening_payload(row: ScreenedProfile, payload: dict[str, Any]) -> ScreenedProfile:
-    """Map flexible n8n / API payload keys onto a ScreenedProfile row."""
+    """Map flexible payload keys onto a ScreenedProfile row."""
 
     def pick(*keys: str, default: Any = None) -> Any:
         for key in keys:

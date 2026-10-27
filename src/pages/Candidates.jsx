@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowUpDown, Briefcase, CalendarDays, Download, FileSearch, ListFilter } from 'lucide-react';
 import Card from '../components/ui/Card';
@@ -90,8 +90,18 @@ function searchText(c) {
 }
 
 export default function Candidates() {
-  const { candidates: rawCandidates, jobOptions, statusOptions, loading, error } = useCandidates();
-  const candidates = useMemo(() => markDuplicates(rawCandidates), [rawCandidates]);
+  const { candidates: rawCandidates, jobOptions, statusOptions, loading, error, reload } = useCandidates();
+
+  // Resumes are screened in the background after upload. Rows appear only once screening has finished
+  // (Completed or Failed); while it runs we just show a count above the table and keep refreshing.
+  const isInProgress = (c) => ['processing', 'queued'].includes(String(c.screeningStatus || '').toLowerCase());
+  const processingCount = useMemo(() => rawCandidates.filter(isInProgress).length, [rawCandidates]);
+  useEffect(() => {
+    if (processingCount === 0) return undefined;
+    const timer = setInterval(() => { reload().catch(() => {}); }, 6000);
+    return () => clearInterval(timer);
+  }, [processingCount, reload]);
+  const candidates = useMemo(() => markDuplicates(rawCandidates.filter((c) => !isInProgress(c))), [rawCandidates]);
   const [search, setSearch] = useState('');
   const [searchParams] = useSearchParams();
   const [jobFilter, setJobFilter] = useState(searchParams.get('job') || 'All');
@@ -221,6 +231,13 @@ export default function Candidates() {
           );
         })}
       </div>
+
+      {processingCount > 0 && (
+        <div className="flex items-center gap-2.5 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-700">
+          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-indigo-300 border-t-indigo-600" />
+          {processingCount} {processingCount === 1 ? 'resume is' : 'resumes are'} being screened. {processingCount === 1 ? 'It' : 'They'} will appear here when finished.
+        </div>
+      )}
 
       <Card padding={false}>
         <div className="p-4">

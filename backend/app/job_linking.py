@@ -1,4 +1,4 @@
-"""Attach Screened profile rows to the right job when n8n wrote a wrong/missing Job code."""
+"""Attach Screened profile rows to the right job when an older row has a wrong/missing Job code."""
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import or_
@@ -7,13 +7,13 @@ from sqlalchemy.orm import Session
 from app.models import Candidate, Job, ScreenedProfile
 from app.screening_profiles import _is_placeholder
 
-# n8n writes the profile a few seconds after the upload; allow slow workflows.
+# A profile can be written some time after the upload; allow slow screenings.
 _UPLOAD_WINDOW_BEFORE = timedelta(minutes=30)
 _UPLOAD_WINDOW_AFTER = timedelta(minutes=2)
 
 
 def is_real_profile(row: ScreenedProfile) -> bool:
-    """Empty n8n items (no name / email) should not count as screened candidates."""
+    """Empty rows (no name / email) should not count as screened candidates."""
     for value in (row.candidate_name, row.email):
         if value and not _is_placeholder(str(value)):
             return True
@@ -57,7 +57,7 @@ def _job_from_role(role: str | None, jobs: list[Job]) -> Job | None:
 def repair_profile_job_codes(db: Session, client_id: str | None) -> int:
     """
     Fix profiles whose Job code is missing or not one of this client's job codes
-    (n8n has been writing the Client ID there). Returns the number of rows fixed.
+    (older rows have the Client ID there). Returns the number of rows fixed.
     """
     if not client_id:
         return 0

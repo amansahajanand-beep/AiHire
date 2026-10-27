@@ -1,19 +1,23 @@
 # HireAI — AI Recruitment Platform
 
-Frontend + FastAPI dashboard backend wired to the **real** n8n screening webhook.
+Frontend + FastAPI backend with **RAG resume screening**: jobs and resumes are parsed and embedded with Gemini,
+stored in pgvector, and the match score comes from vector similarity.
 
-## Real flow
+## Flow
 
 ```
-Login/Register (FastAPI)
-  → Create Job (DB)
-  → Select Job + Upload Resumes
-  → FastAPI POST → https://xbm.app.n8n.cloud/webhook/resume-upload
-  → n8n GET job requirements from FastAPI
-  → LLM screening
-  → n8n POST results back to FastAPI
-  → Candidates appear in dashboard
+Create / edit Job
+  -> parse requirements -> embed chunks -> job_chunks (pgvector)
+
+Upload resumes (Select job)
+  -> store in Supabase -> queue one message per resume (Upstash QStash)
+  -> worker: extract text -> parse -> embed -> resume_chunks
+  -> similarity search vs job_chunks -> Skills / Experience / Education / Stability scores
+  -> Gemini writes strengths, risks, summary, interview questions
+  -> candidate appears in the dashboard
 ```
+
+See `backend/README.md` for the settings each step needs.
 
 ## Run backend
 

@@ -100,7 +100,7 @@ class Candidate(Base):
 
 class ScreenedProfile(Base):
     """
-    Existing n8n / multitenant screening results table in Supabase.
+    Multitenant screening results table in Supabase.
     Table name and column names must match production exactly.
     """
 

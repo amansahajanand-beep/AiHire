@@ -8,7 +8,7 @@ import { getStoredUser } from '../../api/config';
 import useClickOutside from '../../hooks/useClickOutside';
 
 const POLL_MS = 30000;
-const TOAST_MS = 6000;
+const TOAST_MS = 4000;
 const MAX_TOASTS = 3;
 const LIST_LIMIT = 30;
 
@@ -82,7 +82,7 @@ export default function NotificationBell() {
   const wrapRef = useRef(null);
 
   const dismissToast = useCallback((id) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.toastId !== id));
   }, []);
 
   const refresh = useCallback(async () => {

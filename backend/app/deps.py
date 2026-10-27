@@ -1,4 +1,4 @@
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -26,8 +26,3 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
-
-
-def require_n8n_api_key(x_api_key: str | None = Header(default=None, alias="X-API-Key")) -> None:
-    if not x_api_key or x_api_key != settings.n8n_api_key:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid n8n API key")

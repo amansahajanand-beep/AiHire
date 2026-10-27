@@ -8,7 +8,7 @@ const MAX_TOTAL_SIZE = 20 * 1024 * 1024;
 const isPdf = (f) => f.name.toLowerCase().endsWith('.pdf') && (!f.type || f.type === 'application/pdf');
 
 /**
- * Keeps real File objects so they can be uploaded to FastAPI → n8n.
+ * Keeps real File objects so they can be uploaded to the FastAPI backend.
  * Only valid PDFs are accepted: max `maxFiles` files, `maxFileSize` per file, `maxTotalSize` overall.
  */
 export default function FileUploadZone({

@@ -42,6 +42,9 @@ def _ensure_candidate_storage_columns() -> None:
 def _init_db() -> None:
     Base.metadata.create_all(bind=get_engine())
     _ensure_candidate_storage_columns()
+    from app.rag import store
+
+    store.ensure_tables()
 
 
 @asynccontextmanager
@@ -56,7 +59,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version="1.0.0",
-    description="HireAI Dashboard API — Auth, Jobs, Screening orchestration with n8n",
+    description="HireAI Dashboard API — Auth, Jobs, RAG resume screening",
     lifespan=lifespan,
 )
 

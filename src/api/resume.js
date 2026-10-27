@@ -2,8 +2,7 @@ import { apiPostForm } from './client';
 
 /**
  * Upload resumes for a selected job.
- * Frontend → FastAPI → REAL n8n webhook:
- * https://xbm.app.n8n.cloud/webhook/resume-upload
+ * Frontend → FastAPI (stores the files, queues one screening job per resume).
  *
  * Requires job_id (client must select job before upload).
  */

@@ -5,11 +5,12 @@ import re
 from urllib.parse import quote
 
 import httpx
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile
 from pydantic import RootModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app import job_queue
 from app.cache import cached_model, invalidate_client
 from app.config import get_settings
 from app.database import get_db
@@ -29,7 +30,6 @@ from app.schemas import (
     UploadResponse,
 )
 from app.screening_profiles import (
-    apply_screening_payload,
     build_profile_details,
     parse_score_value,
     parse_timestamp,
@@ -281,6 +281,20 @@ def _norm_person_name(value: str | None) -> str:
     return " ".join("".join(ch if ch.isalnum() else " " for ch in value.lower()).split())
 
 
+def _risk_level(risk_flag: str | None) -> str | None:
+    """candidates.risk is a short column (50 chars): keep a level there, the full text lives on the profile row."""
+    text = (risk_flag or "").strip()
+    if not text:
+        return None
+    first = text.splitlines()[0].strip("• -").strip()
+    if first.lower() in {"low", "medium", "high", "none"}:
+        return first.title()[:50]
+    if "no significant risk" in text.lower():
+        return "Low"
+    flags = [ln for ln in text.splitlines() if ln.strip()]
+    return "High" if len(flags) >= 3 else "Medium"
+
+
 def _mark_candidate_screened(
     candidate: Candidate,
     *,
@@ -294,88 +308,11 @@ def _mark_candidate_screened(
         candidate.score = parse_score_value(profile.total_score)
         candidate.name = profile.candidate_name or candidate.name
         candidate.email = profile.email or candidate.email
-        candidate.risk = profile.risk_flag or candidate.risk
+        candidate.risk = _risk_level(profile.risk_flag) or candidate.risk
         candidate.remarks = profile.summary or candidate.remarks
         if profile.my_recommendation:
-            candidate.status = profile.my_recommendation
+            candidate.status = profile.my_recommendation[:50]
     _apply_details_to_candidate(candidate, payload, profile)
-
-
-def _reconcile_screening_completions(db: Session, user: User) -> int:
-    """
-    Link processing uploads to Screened profile rows written by n8n.
-    Sets screened_on so productivity can use created_at → screened_on.
-    """
-    pending = (
-        db.query(Candidate)
-        .filter(
-            Candidate.user_id == user.id,
-            Candidate.screening_status.in_(["queued", "processing"]),
-        )
-        .order_by(Candidate.created_at.asc())
-        .all()
-    )
-    if not pending:
-        return 0
-
-    jobs = {j.id: j for j in db.query(Job).filter(Job.user_id == user.id).all()}
-    profiles = (
-        db.query(ScreenedProfile)
-        .filter(ScreenedProfile.client_id == user.client_id)
-        .all()
-    )
-    usable = []
-    for p in profiles:
-        if not (p.candidate_name or p.email or p.total_score):
-            continue
-        usable.append(p)
-
-    used: set[str] = set()
-    updated = 0
-
-    for candidate in pending:
-        job = jobs.get(candidate.job_id)
-        job_code = job.job_code if job else None
-        c_name = _norm_person_name(candidate.name)
-        best: ScreenedProfile | None = None
-        best_score = -1
-
-        for profile in usable:
-            pid = str(profile.row_id)
-            if pid in used:
-                continue
-            pts = parse_timestamp(profile.timestamp)
-            if candidate.created_at and pts and pts < candidate.created_at - timedelta(minutes=5):
-                continue
-            if candidate.created_at and pts and pts > candidate.created_at + timedelta(hours=6):
-                continue
-
-            score = 0
-            if job_code and profile.job_code and profile.job_code == job_code:
-                score += 3
-            p_name = _norm_person_name(profile.candidate_name)
-            if c_name and p_name and (c_name in p_name or p_name in c_name or c_name[:12] == p_name[:12]):
-                score += 5
-            if candidate.email and profile.email and candidate.email.lower() == profile.email.lower():
-                score += 5
-            if score > best_score:
-                best_score = score
-                best = profile
-
-        # Require at least a name/email match or same job_code inside the time window
-        if not best or best_score < 3:
-            continue
-
-        used.add(str(best.row_id))
-        ended = parse_timestamp(best.timestamp) or datetime.utcnow()
-        if candidate.created_at and ended < candidate.created_at:
-            ended = datetime.utcnow()
-        _mark_candidate_screened(candidate, ended_at=ended, profile=best)
-        updated += 1
-
-    if updated:
-        db.commit()
-    return updated
 
 
 def _compute_ai_productivity(db: Session, user_id: str) -> dict[str, float | int]:
@@ -426,9 +363,6 @@ def dashboard_totals(
 
 
 def _dashboard_totals_uncached(db: Session, current_user: User) -> DashboardTotals:
-    # Finish any uploads whose Screened profile rows arrived without updating Candidate
-    _reconcile_screening_completions(db, current_user)
-
     jobs_count = db.query(func.count(Job.id)).filter(Job.user_id == current_user.id).scalar() or 0
 
     screened_rows = (
@@ -589,7 +523,7 @@ def _utc_iso(value: datetime | None) -> str:
 
 def _utc_iso_from_text(text: str | None) -> str:
     """
-    Parse an n8n 'Timestamp' string such as 2026-10-06T17:54:55.077+05:30 keeping its offset, then return UTC.
+    Parse a 'Timestamp' string such as 2026-10-06T17:54:55.077+05:30 keeping its offset, then return UTC.
     A value with no offset is treated as UTC; an unreadable value falls back to now.
     """
     raw = (text or "").strip()
@@ -1010,8 +944,54 @@ def update_candidate_workflow(
     return _candidate_out_legacy(c, job.title if job else None)
 
 
+def _queue_screening(
+    db: Session, background_tasks: BackgroundTasks, current_user: User, job: Job, uploaded_meta: list[dict]
+) -> UploadResponse:
+    """Hand each resume to the queue and return at once; the UI polls the candidate list."""
+    mode = "queued"
+    for item in uploaded_meta:
+        cid = item["candidate_id"]
+        if job_queue.configured():
+            try:
+                job_queue.publish_screening(cid)
+            except httpx.HTTPError as exc:
+                c = db.get(Candidate, cid)
+                if c:
+                    c.screening_status = "failed"
+                    c.remarks = f"Could not queue screening: {exc}"[:1000]
+            continue
+        # No queue configured (local development): run after the response in this process.
+        mode = "background"
+        background_tasks.add_task(_run_screening_task, cid)
+    db.commit()
+    invalidate_client(current_user.client_id)
+    return UploadResponse(
+        message="Resumes stored and queued for AI screening",
+        client_id=current_user.client_id,
+        job_id=job.id,
+        job_code=job.job_code,
+        uploaded=uploaded_meta,
+        status=mode,
+    )
+
+
+def _run_screening_task(candidate_id: str) -> None:
+    from app.database import SessionLocal
+    from app.rag import pipeline
+
+    db = SessionLocal()
+    try:
+        pipeline.screen_candidate(db, candidate_id)
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        pipeline.mark_failed(db, candidate_id, str(exc))
+    finally:
+        db.close()
+
+
 @router.post("/screening/upload", response_model=UploadResponse)
 async def upload_resumes_for_screening(
+    background_tasks: BackgroundTasks,
     job_id: str = Form(...),
     files: list[UploadFile] = File(...),
     current_user: User = Depends(get_current_user),
@@ -1019,8 +999,8 @@ async def upload_resumes_for_screening(
 ):
     """
     Client must select Job before uploading.
-    Resumes are stored in Supabase Storage bucket `Resume`, then sent to n8n.
-    n8n writes final rows into Screened profile_Multitenent Profile screening.
+    Resumes are stored in Supabase Storage bucket `Resume`, then screened one by one by the RAG worker,
+    which writes the final row into Screened profile_Multitenent Profile screening.
     """
     job = db.query(Job).filter(Job.id == job_id, Job.user_id == current_user.id).first()
     if not job:
@@ -1092,106 +1072,4 @@ async def upload_resumes_for_screening(
     db.commit()
     invalidate_client(current_user.client_id)
 
-    n8n_status = "calling"
-    n8n_response = None
-    form_data = {
-        "client_id": current_user.client_id,
-        "job_id": job.id,
-        "job_code": job.job_code,
-        "job_title": job.title,
-        "resume_urls": ",".join(item["resume_url"] for item in uploaded_meta if item.get("resume_url")),
-        "file_paths": ",".join(item["file_path"] for item in uploaded_meta if item.get("file_path")),
-    }
-
-    ai_started_at = datetime.utcnow()
-    try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            form_data["candidate_ids"] = ",".join(item["candidate_id"] for item in uploaded_meta)
-            resp = await client.post(
-                settings.n8n_resume_webhook_url,
-                data=form_data,
-                files=multipart_files,
-            )
-            ai_ended_at = datetime.utcnow()
-            n8n_status = f"http_{resp.status_code}"
-            try:
-                n8n_response = resp.json()
-            except Exception:
-                n8n_response = {"raw": resp.text[:2000]}
-
-            if resp.is_success and isinstance(n8n_response, dict):
-                results = n8n_response.get("results") or n8n_response.get("candidates") or []
-                if not isinstance(results, list):
-                    results = []
-
-                matched_ids: set[str] = set()
-                for index, item in enumerate(results):
-                    if not isinstance(item, dict):
-                        continue
-                    cid = item.get("candidate_id")
-                    matched = next((m for m in uploaded_meta if m["candidate_id"] == cid), None)
-                    if matched is None and index < len(uploaded_meta):
-                        # n8n often returns results in upload order without candidate_id
-                        matched = uploaded_meta[index]
-                        cid = matched["candidate_id"]
-                    profile = ScreenedProfile()
-                    payload = {
-                        **item,
-                        "client_id": current_user.client_id,
-                        "job_code": item.get("job_code") or job.job_code,
-                        "applied_role": item.get("applied_role") or job.title,
-                        "timestamp": item.get("timestamp") or ai_ended_at.isoformat(),
-                        "file_path": item.get("file_path")
-                        or (matched["file_path"] if matched else None),
-                        "resume_url": item.get("resume_url")
-                        or item.get("Resume URL")
-                        or (matched["resume_url"] if matched else None),
-                    }
-                    apply_screening_payload(profile, payload)
-                    db.add(profile)
-
-                    if cid:
-                        c = db.get(Candidate, cid)
-                        if c and c.user_id == current_user.id:
-                            _mark_candidate_screened(
-                                c, ended_at=ai_ended_at, profile=profile, payload=item
-                            )
-                            matched_ids.add(cid)
-
-                # If webhook succeeded but returned no per-file payload, still record AI wait time
-                if not results:
-                    for item in uploaded_meta:
-                        c = db.get(Candidate, item["candidate_id"])
-                        if c and c.user_id == current_user.id and not c.screened_on:
-                            # Keep processing until Screened profile arrives; stamp start/end for productivity
-                            c.screened_on = ai_ended_at
-                            c.remarks = (c.remarks or "") + (
-                                f"\n[AI wait] {(ai_ended_at - (c.created_at or ai_started_at)).total_seconds():.1f}s"
-                            )
-                            # Treat webhook round-trip as completed AI timing sample
-                            c.screening_status = "completed"
-                db.commit()
-                invalidate_client(current_user.client_id)
-
-            # Link any profiles n8n wrote directly into Supabase
-            _reconcile_screening_completions(db, current_user)
-    except httpx.HTTPError as exc:
-        n8n_status = "error"
-        n8n_response = {"error": str(exc)}
-        for item in uploaded_meta:
-            c = db.get(Candidate, item["candidate_id"])
-            if c:
-                c.screening_status = "failed"
-                c.remarks = f"n8n webhook failed: {exc}"
-        db.commit()
-        invalidate_client(current_user.client_id)
-
-    return UploadResponse(
-        message="Resumes stored in Resume bucket and sent for AI screening",
-        client_id=current_user.client_id,
-        job_id=job.id,
-        job_code=job.job_code,
-        uploaded=uploaded_meta,
-        n8n_status=n8n_status,
-        n8n_response=n8n_response,
-    )
+    return _queue_screening(db, background_tasks, current_user, job, uploaded_meta)
