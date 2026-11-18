@@ -131,11 +131,15 @@ def screen_candidate(db: Session, candidate_id: str) -> dict:
             )
             store.save_resume_profile(db, candidate.client_id, content_hash, parsed_resume, candidate.id)
     else:
+        t0 = time.monotonic()
         try:
-            text = parsing.extract_text(candidate.resume_filename or candidate.file_path, data)
+            text = parsing.extract_text(candidate.resume_filename or candidate.file_path, data, allow_ocr=False)
+            parsed_resume = parsing.parse_resume(text, today)
+        except parsing.ScannedPdf:
+            parsed_resume = parsing.parse_resume(None, today, pdf=data)  # one call instead of OCR + parse
         except ValueError as exc:
             raise PermanentScreeningError(str(exc)) from exc
-        parsed_resume = parsing.parse_resume(text, today)
+        logger.info("Parsed resume %s in %.1fs", candidate.id, time.monotonic() - t0)
         chunks = chunking.resume_chunks(parsed_resume)
         if not chunks:
             raise PermanentScreeningError("Nothing could be extracted from this resume")

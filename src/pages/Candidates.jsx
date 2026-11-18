@@ -98,7 +98,7 @@ export default function Candidates() {
   const processingCount = useMemo(() => rawCandidates.filter(isInProgress).length, [rawCandidates]);
   useEffect(() => {
     if (processingCount === 0) return undefined;
-    const timer = setInterval(() => { reload().catch(() => {}); }, 6000);
+    const timer = setInterval(() => { reload().catch(() => {}); }, 2500);
     return () => clearInterval(timer);
   }, [processingCount, reload]);
   const candidates = useMemo(() => markDuplicates(rawCandidates.filter((c) => !isInProgress(c))), [rawCandidates]);

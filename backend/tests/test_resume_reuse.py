@@ -42,7 +42,7 @@ def env(monkeypatch):
     chunks = {}
 
     monkeypatch.setattr(pipeline, "download_resume_bytes", lambda path: b"same-bytes")
-    monkeypatch.setattr(pipeline.parsing, "extract_text", lambda name, data: "resume text " * 20)
+    monkeypatch.setattr(pipeline.parsing, "extract_text", lambda name, data, **kw: "resume text " * 20)
     monkeypatch.setattr(pipeline.parsing, "parse_resume", lambda text, today: (calls.__setitem__("parse", calls["parse"] + 1), PARSED)[1])
     monkeypatch.setattr(pipeline.gemini, "embed_texts", lambda texts, task_type="": (calls.__setitem__("embed", calls["embed"] + 1), [[0.0]] * len(texts))[1])
     monkeypatch.setattr(pipeline.report, "generate_report", lambda *a, **k: REPORT)

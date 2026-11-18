@@ -47,11 +47,16 @@ def _key() -> str:
     return key
 
 
+# One pooled client: keeps TLS connections to Google alive across the 3-4 calls of a screening run
+# instead of paying a fresh handshake for each.
+_client = httpx.Client(limits=httpx.Limits(max_keepalive_connections=20, keepalive_expiry=60.0))
+
+
 def _post(path: str, body: dict, timeout: float = 90.0, attempts: int = 4) -> dict:
     last = ""
     for attempt in range(attempts):
         try:
-            resp = httpx.post(
+            resp = _client.post(
                 f"{_BASE}/{path}",
                 headers={"x-goog-api-key": _key(), "Content-Type": "application/json"},
                 json=body,
@@ -65,7 +70,7 @@ def _post(path: str, body: dict, timeout: float = 90.0, attempts: int = 4) -> di
             last = f"{resp.status_code}: {resp.text[:300]}"
             if resp.status_code not in _RETRY_STATUS:
                 break
-        time.sleep(1.5 * (2**attempt))
+        time.sleep(min(1.5 * (2**attempt), 6.0) if attempt else 0.5)
     raise GeminiError(f"Gemini request failed ({last})")
 
 
@@ -113,7 +118,17 @@ def _generate(parts: list[dict], system: str | None, json_mode: bool, label: str
         body["generationConfig"]["responseMimeType"] = "application/json"
     if system:
         body["systemInstruction"] = {"parts": [{"text": system}]}
-    data = _post(f"models/{get_settings().gemini_chat_model}:generateContent", body, timeout=120.0)
+    path = f"models/{get_settings().gemini_chat_model}:generateContent"
+    # Extraction / report writing needs no deep reasoning; thinking tokens are the biggest latency cost.
+    # Not every model accepts the field, so fall back to the plain request if it is rejected.
+    fast = {**body, "generationConfig": {**body["generationConfig"], "thinkingConfig": {"thinkingLevel": "minimal"}}}
+    try:
+        data = _post(path, fast, timeout=120.0, attempts=1)
+    except GeminiError as exc:
+        if "400" in str(exc) or "thinking" in str(exc).lower():
+            data = _post(path, body, timeout=120.0)
+        else:
+            data = _post(path, body, timeout=120.0, attempts=3)
     usage = data.get("usageMetadata") or {}
     _track(f"{label}_in", usage.get("promptTokenCount", 0))
     _track(f"{label}_out", (usage.get("candidatesTokenCount", 0) or 0) + (usage.get("thoughtsTokenCount", 0) or 0))
@@ -123,8 +138,13 @@ def _generate(parts: list[dict], system: str | None, json_mode: bool, label: str
         raise GeminiError(f"Gemini returned no content: {str(data)[:300]}") from exc
 
 
-def generate_json(prompt: str, system: str | None = None, label: str = "llm") -> dict:
-    text = _generate([{"text": prompt}], system, json_mode=True, label=label).strip()
+def generate_json(prompt: str, system: str | None = None, label: str = "llm", pdf: bytes | None = None) -> dict:
+    """JSON generation; pass pdf to let the model read a (scanned) PDF directly in the same call."""
+    parts: list[dict] = []
+    if pdf is not None:
+        parts.append({"inline_data": {"mime_type": "application/pdf", "data": base64.b64encode(pdf).decode()}})
+    parts.append({"text": prompt})
+    text = _generate(parts, system, json_mode=True, label=label).strip()
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text)
     try:
         value = json.loads(text)

@@ -949,6 +949,7 @@ def _queue_screening(
 ) -> UploadResponse:
     """Hand each resume to the queue and return at once; the UI polls the candidate list."""
     mode = "queued"
+    local_ids: list[str] = []
     for item in uploaded_meta:
         cid = item["candidate_id"]
         if job_queue.configured():
@@ -962,7 +963,9 @@ def _queue_screening(
             continue
         # No queue configured (local development): run after the response in this process.
         mode = "background"
-        background_tasks.add_task(_run_screening_task, cid)
+        local_ids.append(cid)
+    if local_ids:
+        background_tasks.add_task(_run_screening_batch, local_ids)
     db.commit()
     invalidate_client(current_user.client_id)
     return UploadResponse(
@@ -973,6 +976,14 @@ def _queue_screening(
         uploaded=uploaded_meta,
         status=mode,
     )
+
+
+def _run_screening_batch(candidate_ids: list[str]) -> None:
+    """Local (no queue) mode: screen the uploaded resumes in parallel instead of one after another."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=min(4, len(candidate_ids))) as pool:
+        list(pool.map(_run_screening_task, candidate_ids))
 
 
 def _run_screening_task(candidate_id: str) -> None:

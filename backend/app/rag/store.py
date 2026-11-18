@@ -75,13 +75,14 @@ def ensure_tables() -> None:
 
 def _replace(db: Session, table: str, owner_col: str, owner_id: str, client_id: str | None, rows) -> int:
     db.execute(text(f"DELETE FROM {table} WHERE {owner_col} = :o"), {"o": owner_id})
-    for section, content, vector in rows:
+    if rows:  # one multi-row INSERT = one network round trip instead of one per chunk
+        values, params = [], {"c": client_id, "o": owner_id}
+        for i, (section, content, vector) in enumerate(rows):
+            values.append(f"(:c, :o, :s{i}, :t{i}, CAST(:e{i} AS vector))")
+            params.update({f"s{i}": section, f"t{i}": content, f"e{i}": _vec(vector)})
         db.execute(
-            text(
-                f"INSERT INTO {table} (client_id, {owner_col}, section, content, embedding) "
-                "VALUES (:c, :o, :s, :t, CAST(:e AS vector))"
-            ),
-            {"c": client_id, "o": owner_id, "s": section, "t": content, "e": _vec(vector)},
+            text(f"INSERT INTO {table} (client_id, {owner_col}, section, content, embedding) VALUES " + ", ".join(values)),
+            params,
         )
     db.commit()
     return len(rows)

@@ -12,7 +12,11 @@ from app.rag import gemini
 _MIN_TEXT_CHARS = 200  # below this a PDF is treated as scanned and sent to OCR
 
 
-def extract_text(filename: str, data: bytes) -> str:
+class ScannedPdf(Exception):
+    """The PDF has no text layer; it must be read by the model directly."""
+
+
+def extract_text(filename: str, data: bytes, allow_ocr: bool = True) -> str:
     lower = (filename or "").lower()
     text = ""
     if lower.endswith(".docx"):
@@ -33,6 +37,8 @@ def extract_text(filename: str, data: bytes) -> str:
         except Exception:  # noqa: BLE001 - corrupt PDFs fall through to OCR
             text = ""
         if len(text.strip()) < _MIN_TEXT_CHARS:
+            if not allow_ocr:
+                raise ScannedPdf()
             text = gemini.ocr_pdf(data) or text
     else:
         raise ValueError(f"Unsupported resume format: {filename}")
@@ -106,9 +112,11 @@ def parse_job(job: Job) -> dict:
     }
 
 
-def parse_resume(text: str, today: date | None = None) -> dict:
-    """Structured resume. Extracts only what the resume states (same rules as the original screening prompt)."""
+def parse_resume(text: str | None, today: date | None = None, pdf: bytes | None = None) -> dict:
+    """Structured resume. Extracts only what the resume states (same rules as the original screening prompt).
+    For a scanned PDF pass pdf=bytes (text=None): transcription and extraction happen in ONE model call."""
     today = today or date.today()
+    text = text or ""
     data = gemini.generate_json(
         "Extract the following from the candidate resume. Use ONLY information stated in the resume; "
         'never assume. If something is missing return "Not Available" (or an empty list).\n\n'
