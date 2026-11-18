@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import uuid
+from urllib.parse import quote
 from typing import Any
 
 import httpx
@@ -203,3 +204,17 @@ def _guess_mime(filename: str) -> str:
 
 def new_upload_id() -> str:
     return str(uuid.uuid4())
+
+
+def download_resume_bytes(file_path: str) -> bytes:
+    """Fetch a stored resume from the private Resume bucket (used by the screening worker)."""
+    settings = get_settings()
+    key = normalize_object_path(file_path)
+    if not key or key.startswith("http"):
+        raise StorageError(f"Unusable resume path: {file_path!r}")
+    url = f"{settings.supabase_url.rstrip('/')}/storage/v1/object/{settings.supabase_resume_bucket}/{quote(key)}"
+    with httpx.Client(timeout=60.0) as client:
+        resp = client.get(url, headers=_headers())
+    if resp.status_code >= 400:
+        raise StorageError(f"Resume download failed ({resp.status_code}): {resp.text[:300]}")
+    return resp.content

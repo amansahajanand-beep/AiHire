@@ -13,7 +13,9 @@ export default function RecentCandidates() {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const list = useAppSelector((s) => s.candidates.lists[LIST_KEY]);
-  const rows = (list?.items || []).slice(0, 5);
+  const rows = (list?.items || [])
+    .filter((c) => !['processing', 'queued'].includes(String(c.screeningStatus || '').toLowerCase()))
+    .slice(0, 5);
   const loading = list?.status === 'loading' && rows.length === 0;
 
   useEffect(() => {

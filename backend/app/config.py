@@ -13,12 +13,21 @@ class Settings(BaseSettings):
         "http://localhost:5173,http://127.0.0.1:5173,"
         "https://ai-hire-theta.vercel.app,https://ai-hire-9or8.vercel.app"
     )
-    n8n_resume_webhook_url: str = "https://xbm.app.n8n.cloud/webhook/resume-upload"
-    n8n_api_key: str = "hireai-n8n-internal-key"
     max_resume_uploads: int = 5
     supabase_url: str = "https://othkmsnxujuoqajrkrap.supabase.co"
     supabase_service_role_key: str = ""
     supabase_resume_bucket: str = "Resume"
+    # RAG screening: resumes are scored by vector similarity (Gemini embeddings + pgvector).
+    gemini_api_key: str = ""
+    gemini_embed_model: str = "gemini-embedding-001"
+    gemini_chat_model: str = "gemini-3.1-flash-lite"
+    embed_dim: int = 768
+    # Upstash QStash: delivers one message per resume to POST {backend_public_url}/api/internal/screen-resume.
+    backend_public_url: str = ""
+    qstash_url: str = "https://qstash.upstash.io"
+    qstash_token: str = ""
+    qstash_current_signing_key: str = ""
+    qstash_next_signing_key: str = ""
     # Redis (Upstash) cache. Empty REDIS_URL or CACHE_ENABLED=false turns caching off.
     redis_url: str = ""
     cache_enabled: bool = True

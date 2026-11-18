@@ -1,5 +1,5 @@
 /**
- * Normalize n8n / Google Sheet payloads into the shapes the HireAI UI already uses.
+ * Normalize API payloads into the shapes the HireAI UI already uses.
  * Field names are flexible — update aliases here when real samples arrive.
  */
 

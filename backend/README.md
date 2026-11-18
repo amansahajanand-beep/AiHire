@@ -1,32 +1,34 @@
 # HireAI Dashboard Backend (FastAPI)
 
 Master system for:
-**Client Login → Job Create → Resume Upload → n8n Screening → Results in Dashboard DB**
+**Client Login → Job Create → Resume Upload → RAG Screening → Results in Dashboard DB**
 
 ## Flow
 
 ```
 CLIENT LOGIN (client_id issued)
      ↓
-CREATE JOB (job_id + job_code + requirements in DB)
+CREATE / EDIT JOB  → parse requirements → Gemini embeddings → job_chunks (pgvector)
      ↓
 SELECT JOB + UPLOAD RESUMES
      ↓
-POST /api/screening/upload
+POST /api/screening/upload   (stores files, queues one message per resume, returns at once)
      ↓
-Dashboard → n8n webhook (client_id + job_id + resumes)
+QStash → POST /api/internal/screen-resume   (one resume per call, signed, retried)
      ↓
-n8n → GET /api/internal/jobs/{job_id}/requirements
+extract text → parse → embed → resume_chunks → similarity search against job_chunks
      ↓
-LLM Screening
+scores: Skills 40 / Experience 30 / Education 15 / Stability 15  (deterministic, app/rag/scoring.py)
      ↓
-n8n → POST /api/internal/screening-results
+Gemini writes the report text (strengths, risks, summary, career progression, interview questions)
      ↓
 Dashboard shows candidates under that Job ID
 ```
 
-n8n webhook used for resume upload:
-`https://xbm.app.n8n.cloud/webhook/resume-upload`
+Settings (see `.env.example`): `GEMINI_API_KEY`, `GEMINI_EMBED_MODEL`, `GEMINI_CHAT_MODEL`, `EMBED_DIM`,
+`BACKEND_PUBLIC_URL`, `QSTASH_TOKEN`, `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`.
+Without a QStash token (local development) resumes are screened in a background task instead.
+Existing jobs need embeddings once: `python scripts/backfill_job_embeddings.py`.
 
 ## Setup
 
@@ -108,8 +110,8 @@ Header: `Authorization: Bearer <token>`
 - `job_id` (form field) — required
 - `files` (1–5 PDF/DOC/DOCX)
 
-Dashboard creates candidate rows, then POSTs to n8n with:
-`client_id`, `job_id`, `job_code`, `job_title`, `candidate_ids`, `files`
+The dashboard creates a candidate row per file (status `processing`) and queues it for screening.
+The candidates list shows `processing` until the worker finishes, then `completed` or `failed`.
 
 ### Candidates
 - `GET /api/candidates?job_id=`
@@ -117,33 +119,13 @@ Dashboard creates candidate rows, then POSTs to n8n with:
 - `PATCH /api/candidates/{id}/workflow` `{ humanEvaluation, humanNote, availability }`
 - `GET /api/dashboard/totals`
 
-## n8n Internal APIs
+## Worker endpoint
 
-Header required: `X-API-Key: <N8N_API_KEY from .env>`
-
-1. Fetch requirements for LLM:
-`GET /api/internal/jobs/{job_id}/requirements`
-
-2. Save screening result:
-`POST /api/internal/screening-results`
-```json
-{
-  "client_id": "CLI-XXXX",
-  "job_id": "...",
-  "candidate_id": "...",
-  "name": "John Smith",
-  "score": 92,
-  "status": "Shortlisted",
-  "strengths": ["Strong React"],
-  "weaknesses": ["No AWS"],
-  "breakdown": { "skills": 95, "experience": 88, "education": 82, "keywords": 91, "overall": 92 },
-  "remarks": "...",
-  "risk": "Low"
-}
-```
+`POST /api/internal/screen-resume` is called by QStash only (checked with the `Upstash-Signature` header).
+Body: `{ "candidate_id": "..." }`. It returns 200 when done or permanently failed, and 503 for a temporary error so
+QStash retries.
 
 ## Notes
 
 - Client / Job / Requirements live in **SQLite DB** (`hireai.db`), not Google Sheets.
-- Google Sheet nodes in n8n should be replaced by these Dashboard APIs.
-- Change `SECRET_KEY` and `N8N_API_KEY` before production.
+- Change `SECRET_KEY` before production.
